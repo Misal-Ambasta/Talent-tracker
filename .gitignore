@@ -1,0 +1,33 @@
+# rules
+cursor/
+.trae/
+ats-flowchart.html
+
+# Ignore node_modules in both frontend and backend
+frontend/node_modules/
+backend/node_modules/
+
+# misc
+backend/logs/
+backend/uploads/*
+
+# Optional: ignore build/dist files
+frontend/dist/
+backend/dist/
+
+# Frontend env files
+frontend/.env
+frontend/.env.*
+
+# Backend env files
+backend/.env
+backend/.env.*
+
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS/system files
+.DS_Store
+.env
