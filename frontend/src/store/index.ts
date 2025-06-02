@@ -1,6 +1,4 @@
 import { configureStore } from '@reduxjs/toolkit';
-
-// Import slices
 import authSlice from '../slices/authSlice';
 import jobsSlice from '../slices/jobsSlice';
 import applicantsSlice from '../slices/applicantsSlice';
@@ -8,10 +6,10 @@ import aiResultsSlice from '../slices/aiResultsSlice';
 
 export const store = configureStore({
   reducer: {
-    auth: authSlice.reducer,
-    jobs: jobsSlice.reducer,
-    applicants: applicantsSlice.reducer,
-    aiResults: aiResultsSlice.reducer,
+    auth: authSlice,
+    jobs: jobsSlice,          
+    applicants: applicantsSlice, 
+    aiResults: aiResultsSlice,   
   },
   // Add middleware if needed
   middleware: (getDefaultMiddleware) =>

@@ -1,15 +1,24 @@
 
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Users, Briefcase, FileText, Brain, MessageSquare, BarChart3, Menu, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAppDispatch } from "@/hooks/reduxHooks";
+import { logout } from "@/slices/authSlice";
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const isMobile = useIsMobile();
+  
+  const handleLogout = async () => {
+    await dispatch(logout());
+    navigate('/login');
+  };
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -79,11 +88,13 @@ const Navigation = () => {
                   <div className="flex flex-col space-y-4 mt-8">
                     <NavContent />
                     <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <Link to="/login">
-                        <Button variant="outline" className="w-full">
-                          Logout
-                        </Button>
-                      </Link>
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={handleLogout}
+                      >
+                        Logout
+                      </Button>
                     </div>
                   </div>
                 </SheetContent>
@@ -92,9 +103,9 @@ const Navigation = () => {
             
             {/* Desktop Logout */}
             {!isMobile && (
-              <Link to="/login">
-                <Button variant="outline">Logout</Button>
-              </Link>
+              <Button variant="outline" onClick={handleLogout}>
+                Logout
+              </Button>
             )}
           </div>
         </div>

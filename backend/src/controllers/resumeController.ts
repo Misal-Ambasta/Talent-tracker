@@ -694,7 +694,6 @@ export const batchUploadResumes = async (req: Request, res: Response): Promise<v
     logger.info(`Starting pre-validation for ${files.length} files`);
     const filePaths = files.map(file => file.path);
     const validationResult = await validateFiles(filePaths)();
-    console.log("validationResult", validationResult)
     // If too many files failed validation, stop early
     if (!validationResult.summary.shouldProceed) {
       await cleanupFailedFiles(files);

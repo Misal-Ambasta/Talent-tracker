@@ -9,8 +9,10 @@ import {
   deleteApplicant,
   updateApplicantStatus,
   bulkUpdateApplicantStatus,
-  createApplicant
+  createApplicant,
+  uploadResumeAndCreateApplicant
 } from '../controllers/applicantController';
+import { resumeUpload } from '../utils/fileUpload';
 
 const router = express.Router();
 
@@ -29,5 +31,8 @@ router.patch('/applicants/bulk-status', bulkUpdateApplicantStatus);
 
 // Add new applicant (simple, not tied to job/recruiter)
 router.post('/applicants', createApplicant);
+
+// Upload resume and create applicant
+router.post('/applicants/upload-resume', resumeUpload.single('resume'), uploadResumeAndCreateApplicant);
 
 export default router;

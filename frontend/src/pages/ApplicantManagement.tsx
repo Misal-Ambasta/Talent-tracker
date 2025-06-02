@@ -30,12 +30,18 @@ import {
   Briefcase,
   Mail,
   Clock,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppDispatch, useAppSelector } from "../hooks/reduxHooks";
 import {
   getApplicants,
   updateApplicantStatus,
+  selectApplicants,
+  selectApplicantsLoading,
+  selectApplicantsError,
+  removeApplicant,
 } from "../slices/applicantsSlice";
 
 const ApplicantManagement = () => {
@@ -46,14 +52,13 @@ const ApplicantManagement = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const { applicants, loading, error } = useAppSelector(
-    (state) => state.applicants
-  );
+  const applicants = useAppSelector(selectApplicants);
+  const loading = useAppSelector(selectApplicantsLoading);
+  const error = useAppSelector(selectApplicantsError);
 
   // Extract jobId from URL query params if present
   const queryParams = new URLSearchParams(location.search);
   const jobIdFilter = queryParams.get("jobId");
-
   useEffect(() => {
     dispatch(getApplicants());
   }, [dispatch]);
@@ -69,19 +74,21 @@ const ApplicantManagement = () => {
   }, [error, toast]);
 
   // Filter applicants based on search term, status, and job ID
-  const filteredApplicants = applicants.filter((applicant) => {
-    const matchesSearch =
-      applicant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      applicant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      applicant.jobTitle.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredApplicants = applicants
+    .filter((applicant) => {
+      const matchesSearch =
+        applicant.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        applicant.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        applicant.positionAppliedFor?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || applicant.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" || applicant.status === statusFilter;
 
-    const matchesJob = !jobIdFilter || applicant.jobId === jobIdFilter;
+      const matchesJob = !jobIdFilter || applicant.jobId === jobIdFilter;
 
-    return matchesSearch && matchesStatus && matchesJob;
-  });
+      return matchesSearch && matchesStatus && matchesJob;
+    })
+    .sort((a, b) => new Date(b.applicationDate).getTime() - new Date(a.applicationDate).getTime());
 
   // Calculate counts for each status
   const statusCounts = applicants.reduce((counts, applicant) => {
@@ -97,7 +104,7 @@ const ApplicantManagement = () => {
   const rejectedCount = statusCounts["rejected"] || 0;
 
   const handleStatusChange = (applicantId: string, newStatus: string) => {
-    dispatch(updateApplicantStatus({ id: applicantId, status: newStatus }))
+    dispatch(updateApplicantStatus({ id: applicantId, status: newStatus as "new" | "reviewing" | "interview" | "offer" | "rejected" }))
       .unwrap()
       .then(() => {
         toast({
@@ -112,6 +119,16 @@ const ApplicantManagement = () => {
           variant: "destructive",
         });
       });
+  };
+
+  const handleDeleteApplicant = (applicantId: string) => {
+    if (window.confirm('Are you sure you want to delete this applicant?')) {
+      dispatch(removeApplicant(applicantId));
+      toast({
+        title: "Applicant deleted",
+        description: "The applicant has been successfully deleted.",
+      });
+    }
   };
 
   return (
@@ -263,7 +280,7 @@ const ApplicantManagement = () => {
                     <div className="flex-1 mb-4 md:mb-0">
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                          {applicant.name}
+                          {applicant.fullName}
                         </h3>
                         <Badge
                           variant={
@@ -302,7 +319,7 @@ const ApplicantManagement = () => {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <div className="flex items-center">
                           <Briefcase className="w-4 h-4 mr-1" />
-                          <span>{applicant.jobTitle}</span>
+                          <span>{applicant.positionAppliedFor ? applicant.positionAppliedFor: "Software Developer"}</span>
                         </div>
                         <div className="flex items-center">
                           <Mail className="w-4 h-4 mr-1" />
@@ -317,24 +334,28 @@ const ApplicantManagement = () => {
                         <div className="flex items-center">
                           <Calendar className="w-4 h-4 mr-1" />
                           <span>
-                            Applied{" "}
+                            Applied -{" "}
                             {new Date(
-                              applicant.appliedDate
-                            ).toLocaleDateString()}
+                              applicant.applicationDate
+                            ).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'long',
+                              year: 'numeric'
+                            })}
                           </span>
                         </div>
                         <div className="flex items-center">
                           <MapPin className="w-4 h-4 mr-1" />
-                          <span>{applicant.location}</span>
+                          <span>{applicant.location ? applicant.location : "Kolkata"}</span>
                         </div>
                         <div className="flex items-center">
                           <Clock className="w-4 h-4 mr-1" />
-                          <span>{applicant.experience} years exp.</span>
+                          <span>{applicant.yearsOfExperience} years exp.</span>
                         </div>
                       </div>
                       <div className="mt-3">
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {applicant.skills.map((skill, skillIndex) => (
+                          {applicant.skills?.map((skill, skillIndex) => (
                             <Badge key={skillIndex} variant="outline">
                               {skill}
                             </Badge>
@@ -346,7 +367,9 @@ const ApplicantManagement = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="justify-start">
+                        className="justify-start"
+                        disabled={!applicant.resume}
+                        title={!applicant.resume ? "No resume available" : "View resume"}>
                         <FileText className="w-4 h-4 mr-2" />
                         View Resume
                       </Button>
@@ -363,6 +386,14 @@ const ApplicantManagement = () => {
                         className="justify-start">
                         <Mail className="w-4 h-4 mr-2" />
                         Send Email
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="justify-start text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleDeleteApplicant(applicant._id)}>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Applicant
                       </Button>
                       <div className="mt-2">
                         <Label

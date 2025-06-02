@@ -6,6 +6,7 @@ import { IResume } from './Resume';
 export type ApplicantStatus = 
   | 'new' 
   | 'screening' 
+  | 'reviewing' 
   | 'interview' 
   | 'technical' 
   | 'offer' 
@@ -14,14 +15,16 @@ export type ApplicantStatus =
 
 export interface IApplicant extends Document {
   _id: Types.ObjectId;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   email: string;
   phone?: string;
   linkedInUrl?: string;
   portfolioUrl?: string;
   currentCompany?: string;
   currentPosition?: string;
+  skills?: string[];
+  location?: string;
+  additionalNotes?: string;
   yearsOfExperience?: number;
   education?: {
     degree?: string;
@@ -40,14 +43,16 @@ export interface IApplicant extends Document {
 }
 
 const ApplicantSchema: Schema = new Schema({
-  firstName: { type: String, required: true, trim: true },
-  lastName: { type: String, required: true, trim: true },
+  fullName: { type: String, required: true, trim: true },
   email: { type: String, required: true, trim: true, lowercase: true },
   phone: { type: String, trim: true },
   linkedInUrl: { type: String, trim: true },
   portfolioUrl: { type: String, trim: true },
   currentCompany: { type: String, trim: true },
   currentPosition: { type: String, trim: true },
+  location: { type: String, trim: true },
+  additionalNotes: { type: String, trim: true },
+  skills: [String],
   yearsOfExperience: { type: Number },
   education: {
     degree: { type: String, trim: true },
@@ -57,7 +62,7 @@ const ApplicantSchema: Schema = new Schema({
   status: { 
     type: String, 
     required: true, 
-    enum: ['new', 'screening', 'interview', 'technical', 'offer', 'hired', 'rejected'],
+    enum: ['new', 'screening', 'reviewing', 'interview', 'technical', 'offer', 'hired', 'rejected'],
     default: 'new'
   },
   notes: { type: String },
@@ -65,12 +70,10 @@ const ApplicantSchema: Schema = new Schema({
   resume: { 
     type: Schema.Types.ObjectId, 
     ref: 'Resume', 
-    required: true 
   },
   jobPost: { 
     type: Schema.Types.ObjectId, 
     ref: 'JobPost', 
-    required: true 
   },
   recruiter: { 
     type: Schema.Types.ObjectId, 

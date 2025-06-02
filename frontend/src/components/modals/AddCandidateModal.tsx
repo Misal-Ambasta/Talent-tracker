@@ -7,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, User, FileText } from "lucide-react";
+import { Upload, User, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAppDispatch, useAppSelector } from "@/hooks/reduxHooks";
+import { addApplicant, uploadResumeApplicant } from "@/slices/applicantsSlice";
 
 interface AddCandidateModalProps {
   isOpen: boolean;
@@ -18,16 +20,20 @@ interface AddCandidateModalProps {
 const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
-    name: "",
+    fullName: "",
     email: "",
     phone: "",
-    position: "",
-    experience: "",
+    positionAppliedFor: "",
+    yearsOfExperience: "",
     location: "",
     skills: "",
-    notes: ""
+    additionalNote: ""
   });
+  const [activeTab, setActiveTab] = useState("upload");
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
+  const { loading, error } = useAppSelector((state) => state.applicants);
+  const { user } = useAppSelector((state) => state.auth); // Get the logged-in user from auth state
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -54,17 +60,51 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
       [e.target.name]: e.target.value
     });
   };
+  
+  const handleSelectChange = (value: string, field: string) => {
+    setFormData({
+      ...formData,
+      [field]: value
+    });
+  };
 
-  const handleSubmit = () => {
-    if (selectedFile) {
+  const handleSubmit = async () => {
+    if (activeTab === "upload" && selectedFile) {
       // Handle resume upload submission
-      toast({
-        title: "Resume submitted",
-        description: "AI is processing the resume and extracting candidate information",
-      });
-    } else {
+      const formData = new FormData();
+      formData.append('resume', selectedFile);
+      
+      // Add recruiter ID to the form data
+      if (user?.id) {
+        formData.append('recruiterId', user.id);
+      } else {
+        toast({
+          title: "Error",
+          description: "You must be logged in to add a candidate",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      dispatch(uploadResumeApplicant(formData))
+        .unwrap()
+        .then(() => {
+          toast({
+            title: "Resume submitted",
+            description: "Candidate has been added to the system",
+          });
+          onClose();
+        })
+        .catch((err) => {
+          toast({
+            title: "Error",
+            description: err || "Failed to upload resume",
+            variant: "destructive",
+          });
+        });
+    } else if (activeTab === "manual") {
       // Handle manual form submission
-      if (!formData.name || !formData.email || !formData.position) {
+      if (!formData.fullName || !formData.email || !formData.positionAppliedFor) {
         toast({
           title: "Missing information",
           description: "Please fill in name, email, and position",
@@ -72,12 +112,55 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
         });
         return;
       }
-      toast({
-        title: "Candidate added",
-        description: "New candidate has been added to the system",
-      });
+      
+      // Convert skills string to array
+      const skillsArray = formData.skills.split(',').map(skill => skill.trim()).filter(Boolean);
+      
+      // Convert years of experience to number if possible
+      let yearsOfExperience;
+      if (formData.yearsOfExperience) {
+        if (formData.yearsOfExperience === "0-1") yearsOfExperience = 1;
+        else if (formData.yearsOfExperience === "2-3") yearsOfExperience = 3;
+        else if (formData.yearsOfExperience === "4-5") yearsOfExperience = 5;
+        else if (formData.yearsOfExperience === "6-10") yearsOfExperience = 10;
+        else if (formData.yearsOfExperience === "10+") yearsOfExperience = 15;
+      }
+      
+      // Check if user is logged in
+      if (!user?.id) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to add a candidate",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const applicantData = {
+        ...formData,
+        skills: skillsArray,
+        yearsOfExperience: yearsOfExperience,
+        status: "new",
+        recruiterId: user.id // Add the recruiter ID from the auth state
+      };
+      
+      dispatch(addApplicant(applicantData))
+        .unwrap()
+        .then(() => {
+          toast({
+            title: "Candidate added",
+            description: "New candidate has been added to the system",
+          });
+          onClose();
+        })
+        .catch((err) => {
+          toast({
+            title: "Error",
+            description: err || "Failed to add candidate",
+            variant: "destructive",
+          });
+        });
     }
-    onClose();
   };
 
   return (
@@ -90,7 +173,7 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="upload" className="w-full">
+        <Tabs defaultValue="upload" className="w-full" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="upload">Upload Resume</TabsTrigger>
             <TabsTrigger value="manual">Manual Entry</TabsTrigger>
@@ -111,8 +194,13 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
                   className="hidden"
                   id="resume-upload"
                 />
-                <Label htmlFor="resume-upload">
-                  <Button variant="outline" className="cursor-pointer">
+                <Label htmlFor="resume-upload" className="cursor-pointer">
+                  <Button 
+                    variant="outline" 
+                    className="cursor-pointer"
+                    type="button"
+                    onClick={() => document.getElementById('resume-upload')?.click()}
+                  >
                     Choose File
                   </Button>
                 </Label>
@@ -141,12 +229,12 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
           <TabsContent value="manual" className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Full Name *</Label>
+                <Label htmlFor="fullName">Full Name *</Label>
                 <Input
-                  id="name"
-                  name="name"
+                  id="fullName"
+                  name="fullName"
                   placeholder="John Doe"
-                  value={formData.name}
+                  value={formData.fullName}
                   onChange={handleInputChange}
                   required
                 />
@@ -177,12 +265,12 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
                 />
               </div>
               <div>
-                <Label htmlFor="position">Position Applied For *</Label>
+                <Label htmlFor="positionAppliedFor">Position Applied For *</Label>
                 <Input
-                  id="position"
-                  name="position"
+                  id="positionAppliedFor"
+                  name="positionAppliedFor"
                   placeholder="Software Engineer"
-                  value={formData.position}
+                  value={formData.positionAppliedFor}
                   onChange={handleInputChange}
                   required
                 />
@@ -192,7 +280,7 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="experience">Years of Experience</Label>
-                <Select>
+                <Select onValueChange={(value) => handleSelectChange(value, "yearsOfExperience")}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select experience" />
                   </SelectTrigger>
@@ -229,13 +317,13 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
             </div>
 
             <div>
-              <Label htmlFor="notes">Additional Notes</Label>
+              <Label htmlFor="additionalNote">Additional Notes</Label>
               <Textarea
-                id="notes"
-                name="notes"
+                id="additionalNote"
+                name="additionalNote"
                 placeholder="Any additional information about the candidate..."
                 className="h-24"
-                value={formData.notes}
+                value={formData.additionalNote}
                 onChange={handleInputChange}
               />
             </div>
@@ -243,9 +331,18 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
         </Tabs>
 
         <div className="flex space-x-3 pt-4">
-          <Button onClick={handleSubmit} className="flex-1">
-            <User className="w-4 h-4 mr-2" />
-            Add Candidate
+          <Button onClick={handleSubmit} className="flex-1" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <User className="w-4 h-4 mr-2" />
+                Add Candidate
+              </>
+            )}
           </Button>
           <Button variant="outline" onClick={onClose}>
             Cancel

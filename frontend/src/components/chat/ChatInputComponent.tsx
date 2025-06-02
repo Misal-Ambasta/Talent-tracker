@@ -46,7 +46,6 @@ const ChatInputComponent = ({ onSummarize, isProcessing = false }: ChatInputComp
       });
       return;
     }
-    console.log("Submitting chat text:", chatText);
     onSummarize(chatText);
   };
 

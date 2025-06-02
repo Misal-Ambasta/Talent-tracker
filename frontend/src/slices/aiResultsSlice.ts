@@ -389,4 +389,4 @@ export const {
   clearCurrentBiasDetection,
 } = aiResultsSlice.actions;
 
-export default aiResultsSlice;
+export default aiResultsSlice.reducer;

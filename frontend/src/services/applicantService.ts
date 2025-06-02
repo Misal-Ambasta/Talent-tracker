@@ -3,72 +3,61 @@ import { API_BASE_URL, API_URLS } from '../config/api';
 
 // Interface matching the backend Applicant model
 export interface ApplicantData {
-  firstName: string;
-  lastName: string;
+  fullName: string;
   email: string;
   phone?: string;
-  linkedInUrl?: string;
-  portfolioUrl?: string;
-  currentCompany?: string;
-  currentPosition?: string;
+  positionAppliedFor: string;
   yearsOfExperience?: number;
-  education?: {
-    degree?: string;
-    institution?: string;
-    graduationYear?: number;
-  };
-  status: 'new' | 'screening' | 'interview' | 'technical' | 'offer' | 'hired' | 'rejected';
-  notes?: string;
-  tags?: string[];
-  resume: string; // Resume ID
-  matchScore?: number;
+  location?: string;
+  skills?: string[];
+  additionalNote?: string;
+  status?: 'new' | 'reviewing' | 'interview' | 'offer' | 'rejected';
 }
 
 export interface Applicant extends ApplicantData {
   _id: string;
-  jobPost: string; // Job ID
-  recruiter: string; // Recruiter ID
+  jobId?: string; // Job ID
+  recruiter?: string; // Recruiter ID
+  resume?: string; // Resume ID
+  createdAt: string;
+  updatedAt: string;
+  matchScore?: number;
   applicationDate: string;
-  lastUpdated: string;
 }
 
 /**
- * Fetch all applicants for a specific job
+ * Fetch all applicants
  */
-export const fetchApplicants = async (jobId?: string): Promise<{ applicants: Applicant[] }> => {
-  const url = jobId ? `${API_URLS.JOBS}/${jobId}/applicants` : API_URLS.APPLICANTS;
+export const fetchApplicants = async (): Promise<Applicant[]> => {
+  const url =`${API_URLS.APPLICANTS}/all`;
   const response = await axiosInstance.get(url);
-  return response.data;
+  return response.data.applicants;
 };
 
 /**
  * Fetch a specific applicant by ID
  */
-export const fetchApplicantById = async (applicantId: string): Promise<{ applicant: Applicant }> => {
+export const fetchApplicantById = async (applicantId: string): Promise<Applicant> => {
   const response = await axiosInstance.get(`${API_URLS.APPLICANTS}/${applicantId}`);
-  return response.data;
+  return response.data.applicant;
 };
 
 /**
- * Create a new applicant for a job
+ * Create a new applicant manually
  */
-export const createApplicant = async (jobId: string, applicantData: Omit<ApplicantData, 'resume'>, resumeFile: File): Promise<{ applicant: Applicant }> => {
-  // First upload the resume
-  const formData = new FormData();
-  formData.append('resume', resumeFile);
-  
-  const resumeResponse = await axiosInstance.post(`${API_URLS.RESUMES}/upload`, formData, {
+export const createApplicant = async (applicantData: ApplicantData): Promise<Applicant> => {
+  const response = await axiosInstance.post(`${API_URLS.APPLICANTS}`, applicantData);
+  return response.data.applicant;
+};
+
+/**
+ * Upload a resume and create an applicant
+ */
+export const uploadResumeAndCreateApplicant = async (formData: FormData): Promise<{ applicant: Applicant, resume: any }> => {
+  const response = await axiosInstance.post(`${API_URLS.APPLICANTS}/upload-resume`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
-  });
-  
-  const resumeId = resumeResponse.data.resume._id;
-  
-  // Then create the applicant with the resume ID
-  const response = await axiosInstance.post(`${API_URLS.JOBS}/${jobId}/applicants`, {
-    ...applicantData,
-    resume: resumeId,
   });
   
   return response.data;
@@ -77,9 +66,9 @@ export const createApplicant = async (jobId: string, applicantData: Omit<Applica
 /**
  * Update an existing applicant
  */
-export const updateApplicant = async (applicantId: string, applicantData: Partial<ApplicantData>): Promise<{ applicant: Applicant }> => {
+export const updateApplicant = async (applicantId: string, applicantData: Partial<ApplicantData>): Promise<Applicant> => {
   const response = await axiosInstance.put(`${API_URLS.APPLICANTS}/${applicantId}`, applicantData);
-  return response.data;
+  return response.data.applicant;
 };
 
 /**
@@ -89,9 +78,9 @@ export const updateApplicantStatus = async (
   applicantId: string, 
   status: Applicant['status'], 
   notes?: string
-): Promise<{ applicant: Applicant }> => {
+): Promise<Applicant> => {
   const response = await axiosInstance.patch(`${API_URLS.APPLICANTS}/${applicantId}/status`, { status, notes });
-  return response.data;
+  return response.data.applicant;
 };
 
 /**
@@ -108,6 +97,7 @@ export const bulkUpdateApplicantStatus = async (
 /**
  * Delete an applicant
  */
-export const deleteApplicant = async (applicantId: string): Promise<void> => {
-  await axiosInstance.delete(`${API_URLS.APPLICANTS}/${applicantId}`);
+export const deleteApplicant = async (applicantId: string): Promise<string> => {
+  const response = await axiosInstance.delete(`${API_URLS.APPLICANTS}/${applicantId}`);
+  return applicantId;
 };

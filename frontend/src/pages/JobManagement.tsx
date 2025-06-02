@@ -37,7 +37,6 @@ import { getJobs, addJob, removeJob } from "../slices/jobsSlice";
 const JobManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isCreating, setIsCreating] = useState(false);
-  console.log("isCreating", isCreating);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -102,8 +101,7 @@ const JobManagement = () => {
 
     // Parse salary range into min and max
     const salaryMatch = newJob.salaryRange.match(/(\d+[,\d]*)\s*-\s*(\d+[,\d]*)/);
-console.log("salaryMatch", salaryMatch);
-const salary = salaryMatch
+    const salary = salaryMatch
   ? {
       min: parseInt(salaryMatch[1].replace(/,/g, "")),
       max: parseInt(salaryMatch[2].replace(/,/g, "")),
@@ -114,7 +112,6 @@ const salary = salaryMatch
       max: 0,
       currency: "USD",
     };
-console.log("salary", salary)
     // Create job data object
     const jobData = {
       title: newJob.title,

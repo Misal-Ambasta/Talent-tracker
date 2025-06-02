@@ -1,0 +1,5 @@
+uploads/
+logs/
+dist/
+.env
+*.log
