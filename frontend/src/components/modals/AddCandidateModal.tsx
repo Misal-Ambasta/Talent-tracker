@@ -11,6 +11,7 @@ import { Upload, User, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppDispatch, useAppSelector } from "@/hooks/reduxHooks";
 import { addApplicant, uploadResumeApplicant } from "@/slices/applicantsSlice";
+import { ApplicantData } from "@/services/applicantService";
 
 interface AddCandidateModalProps {
   isOpen: boolean;
@@ -136,12 +137,12 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
         return;
       }
 
-      const applicantData = {
+      const applicantData: ApplicantData = {
         ...formData,
         skills: skillsArray,
         yearsOfExperience: yearsOfExperience,
         status: "new",
-        recruiterId: user.id // Add the recruiter ID from the auth state
+        recruiterId: user.id
       };
       
       dispatch(addApplicant(applicantData))

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestHeaders } from 'axios';
 import { API_BASE_URL } from '../config/api';
 
 // Create an axios instance
@@ -11,7 +11,7 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers = config.headers || {};
+      config.headers = config.headers ?? {} as AxiosRequestHeaders;
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

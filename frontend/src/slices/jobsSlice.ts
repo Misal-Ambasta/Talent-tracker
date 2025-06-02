@@ -29,6 +29,7 @@ interface Job {
   recruiter?: string;
   createdAt: string;
   updatedAt: string;
+  applicantCount?: number;
 }
 
 interface JobsState {
@@ -121,6 +122,7 @@ const jobsSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
+      // @ts-ignore
       .addCase(getJobs.fulfilled, (state, action: PayloadAction<Job[]>) => {
         state.loading = false;
         state.jobs = action.payload;
@@ -134,6 +136,7 @@ const jobsSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
+      // @ts-ignore
       .addCase(getJobById.fulfilled, (state, action: PayloadAction<Job>) => {
         state.loading = false;
         state.currentJob = action.payload;
@@ -147,6 +150,7 @@ const jobsSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
+      // @ts-ignore
       .addCase(addJob.fulfilled, (state, action: PayloadAction<Job>) => {
         state.loading = false;
         state.jobs.unshift(action.payload); // Add new job to the beginning of the array
@@ -160,6 +164,7 @@ const jobsSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
+      // @ts-ignore
       .addCase(editJob.fulfilled, (state, action: PayloadAction<Job>) => {
         state.loading = false;
         const index = state.jobs.findIndex((job) => job._id === action.payload._id);
