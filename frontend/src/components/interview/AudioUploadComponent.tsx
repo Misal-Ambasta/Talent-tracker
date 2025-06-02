@@ -175,9 +175,6 @@ const AudioUploadComponent = ({ onTranscriptionComplete }: AudioUploadComponentP
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm" onClick={togglePlayback}>
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                </Button>
                 <Button variant="ghost" size="sm" onClick={removeFile}>
                   <Trash2 className="w-4 h-4" />
                 </Button>

@@ -80,6 +80,11 @@ const ResumeMatching = () => {
         // Update match results if available
         if (response.matchResults && response.matchResults.length > 0) {
           setMatchResults(response.matchResults);
+          if (inputRef.current) {
+            inputRef.current.value = '';
+          }
+          setSingleResumeFile(null);
+          setSingleResumeUploaded(false);
           toast({
             title: "Upload and matching complete",
             description: `${selectedFiles.length} resumes processed and matched successfully`,
@@ -299,7 +304,17 @@ const ResumeMatching = () => {
                 {/* Job Mode Selection */}
                 <div>
                   <Label>Job Selection Mode</Label>
-                  <RadioGroup value={jobMode} onValueChange={setJobMode} className="flex space-x-6 mt-2">
+                  <RadioGroup 
+                    value={jobMode} 
+                    onValueChange={(value) => {
+                      setJobMode(value);
+                      // Reset job description when switching to 'new' mode
+                      if (value === "new") {
+                        setJobDescription("");
+                      }
+                    }} 
+                    className="flex space-x-6 mt-2"
+                  >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="existing" id="existing" />
                       <Label htmlFor="existing">Select Existing Job</Label>
@@ -447,10 +462,10 @@ const ResumeMatching = () => {
                               {candidate.name}
                             </h3>
                             <Badge 
-                              variant={getScoreBadgeVariant(candidate.overallScore)}
-                              className={`text-sm ${getScoreColor(candidate.overallScore)}`}
+                              variant={getScoreBadgeVariant(candidate.score)}
+                              className={`text-sm ${getScoreColor(candidate.score)}`}
                             >
-                              {candidate.overallScore}% Match
+                              {candidate.score}% Match
                             </Badge>
                           </div>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mb-3">
