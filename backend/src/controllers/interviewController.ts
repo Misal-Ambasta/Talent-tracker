@@ -90,10 +90,10 @@ export const uploadInterviewAudio = async (req: Request, res: Response): Promise
     try {
       // Transcribe the audio
       const transcriptionResult = await transcribeAudio(interviewAudio.filePath, {});
-      console.log('transcriptionResult', transcriptionResult);
+
       // Generate summary and analysis
       const summaryResult = await generateInterviewSummary(transcriptionResult.transcription);
-      console.log('summaryResult', summaryResult);
+
       // Create interview summary
       const interviewSummary = new InterviewSummary({
         interviewAudio: interviewAudio._id,
@@ -298,7 +298,7 @@ export const processInterviewText = async (req: Request, res: Response): Promise
 
     // Generate summary and analysis directly from text
     const summaryResult = await generateInterviewSummary(text);
-    console.log('summaryResult', summaryResult);
+
     // Create interview summary without applicant or job context
     const interviewSummary = new InterviewSummary({
       transcription: text, // The text input is treated as the transcription

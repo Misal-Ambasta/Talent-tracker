@@ -149,7 +149,7 @@ const jobsSlice = createSlice({
       })
       .addCase(addJob.fulfilled, (state, action: PayloadAction<Job>) => {
         state.loading = false;
-        state.jobs.push(action.payload);
+        state.jobs.unshift(action.payload); // Add new job to the beginning of the array
       })
       .addCase(addJob.rejected, (state, action) => {
         state.loading = false;
@@ -194,4 +194,4 @@ const jobsSlice = createSlice({
 });
 
 export const { clearJobError, clearCurrentJob } = jobsSlice.actions;
-export default jobsSlice;
+export default jobsSlice.reducer;

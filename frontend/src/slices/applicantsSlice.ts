@@ -1,34 +1,17 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchApplicants, fetchApplicantById, createApplicant, updateApplicantStatus as updateStatus, deleteApplicant } from '../services/applicantService';
-import type { PayloadAction } from '@reduxjs/toolkit';
-import type { Applicant as ApplicantType } from '../services/applicantService';
+import { RootState } from '../store';
+import {
+  fetchApplicants,
+  fetchApplicantById,
+  createApplicant,
+  updateApplicantStatus as updateStatus,
+  deleteApplicant,
+  bulkUpdateApplicantStatus,
+  uploadResumeAndCreateApplicant,
+} from '../services/applicantService';
+import { Applicant, ApplicantData } from '../services/applicantService';
 
-interface Applicant {
-  _id: string;
-  jobPost: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
-  linkedInUrl?: string;
-  portfolioUrl?: string;
-  currentCompany?: string;
-  currentPosition?: string;
-  yearsOfExperience?: number;
-  education?: {
-    degree?: string;
-    institution?: string;
-    graduationYear?: number;
-  };
-  status: 'new' | 'screening' | 'interview' | 'technical' | 'offer' | 'hired' | 'rejected';
-  notes?: string;
-  tags?: string[];
-  resume: string;
-  matchScore?: number;
-  recruiter: string;
-  applicationDate: string;
-  lastUpdated: string;
-}
+// Applicant interface is now imported from applicantService.ts
 
 interface ApplicantsState {
   applicants: Applicant[];
@@ -47,10 +30,10 @@ const initialState: ApplicantsState = {
 // Async thunks using the applicant service
 export const getApplicants = createAsyncThunk(
   'applicants/getApplicants',
-  async (jobId: string, { rejectWithValue }) => {
+  async (j, { rejectWithValue }) => {
     try {
-      const response = await fetchApplicants(jobId);
-      return response.applicants;
+      const applicants = await fetchApplicants();
+      return applicants;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch applicants');
     }
@@ -61,30 +44,36 @@ export const getApplicantById = createAsyncThunk(
   'applicants/getApplicantById',
   async (id: string, { rejectWithValue }) => {
     try {
-      const response = await fetchApplicantById(id);
-      return response.applicant;
+      const applicant = await fetchApplicantById(id);
+      return applicant;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch applicant');
     }
   }
 );
 
+// Add a new applicant manually
 export const addApplicant = createAsyncThunk(
   'applicants/addApplicant',
-  async (
-    { jobId, applicantData, resumeFile }: 
-    { 
-      jobId: string; 
-      applicantData: Omit<ApplicantType, 'resume'>; 
-      resumeFile: File 
-    }, 
-    { rejectWithValue }
-  ) => {
+  async (applicantData: ApplicantData, { rejectWithValue }) => {
     try {
-      const response = await createApplicant(jobId, applicantData, resumeFile);
-      return response.applicant;
+      const applicant = await createApplicant(applicantData);
+      return applicant;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create applicant');
+      return rejectWithValue(error.response?.data?.message || 'Failed to add applicant');
+    }
+  }
+);
+
+// Add a new applicant by uploading a resume
+export const uploadResumeApplicant = createAsyncThunk(
+  'applicants/uploadResumeApplicant',
+  async (formData: FormData, { rejectWithValue }) => {
+    try {
+      const response = await uploadResumeAndCreateApplicant(formData);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to upload resume and create applicant');
     }
   }
 );
@@ -96,8 +85,8 @@ export const updateApplicantStatus = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await updateStatus(id, status, notes);
-      return response.applicant;
+      const applicant = await updateStatus(id, status, notes);
+      return applicant;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to update applicant status');
     }
@@ -134,7 +123,7 @@ const applicantsSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(getApplicants.fulfilled, (state, action: PayloadAction<Applicant[]>) => {
+      .addCase(getApplicants.fulfilled, (state, action) => {
         state.loading = false;
         state.applicants = action.payload;
       })
@@ -142,12 +131,13 @@ const applicantsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+
       // Get applicant by ID
       .addCase(getApplicantById.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(getApplicantById.fulfilled, (state, action: PayloadAction<Applicant>) => {
+      .addCase(getApplicantById.fulfilled, (state, action) => {
         state.loading = false;
         state.currentApplicant = action.payload;
       })
@@ -155,12 +145,13 @@ const applicantsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      // Add new applicant
+
+      // Add applicant manually
       .addCase(addApplicant.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(addApplicant.fulfilled, (state, action: PayloadAction<Applicant>) => {
+      .addCase(addApplicant.fulfilled, (state, action) => {
         state.loading = false;
         state.applicants.push(action.payload);
       })
@@ -168,36 +159,50 @@ const applicantsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+
+      // Add applicant by uploading resume
+      .addCase(uploadResumeApplicant.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(uploadResumeApplicant.fulfilled, (state, action) => {
+        state.loading = false;
+        state.applicants.push(action.payload.applicant);
+      })
+      .addCase(uploadResumeApplicant.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
       // Update applicant status
       .addCase(updateApplicantStatus.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateApplicantStatus.fulfilled, (state, action: PayloadAction<Applicant>) => {
+      .addCase(updateApplicantStatus.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.applicants.findIndex((applicant) => applicant._id === action.payload._id);
+        const index = state.applicants.findIndex(
+          (applicant) => applicant._id === action.payload._id
+        );
         if (index !== -1) {
           state.applicants[index] = action.payload;
-        }
-        if (state.currentApplicant?._id === action.payload._id) {
-          state.currentApplicant = action.payload;
         }
       })
       .addCase(updateApplicantStatus.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
+
       // Remove applicant
       .addCase(removeApplicant.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(removeApplicant.fulfilled, (state, action: PayloadAction<string>) => {
+      .addCase(removeApplicant.fulfilled, (state, action) => {
         state.loading = false;
-        state.applicants = state.applicants.filter((applicant) => applicant._id !== action.payload);
-        if (state.currentApplicant?._id === action.payload) {
-          state.currentApplicant = null;
-        }
+        state.applicants = state.applicants.filter(
+          (applicant) => applicant._id !== action.payload
+        );
       })
       .addCase(removeApplicant.rejected, (state, action) => {
         state.loading = false;
@@ -207,4 +212,9 @@ const applicantsSlice = createSlice({
 });
 
 export const { clearApplicantError, clearCurrentApplicant } = applicantsSlice.actions;
-export default applicantsSlice;
+export const selectApplicants = (state: RootState) => state.applicants.applicants;
+export const selectCurrentApplicant = (state: RootState) => state.applicants.currentApplicant;
+export const selectApplicantsLoading = (state: RootState) => state.applicants.loading;
+export const selectApplicantsError = (state: RootState) => state.applicants.error;
+
+export default applicantsSlice.reducer;

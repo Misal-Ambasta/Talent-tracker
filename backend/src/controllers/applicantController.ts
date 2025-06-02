@@ -1,37 +1,17 @@
 import { Request, Response } from 'express';
-import Joi from 'joi';
 import mongoose from 'mongoose';
-import Applicant, { IApplicant, ApplicantStatus } from '../models/Applicant';
+import Joi from 'joi';
+import Applicant, { ApplicantStatus } from '../models/Applicant';
 import JobPost from '../models/JobPost';
 import Resume from '../models/Resume';
 import logger from '../utils/logger';
+import { extractTextFromFile, cleanExtractedText } from '../utils/textExtraction';
+import { extractCandidateDetails } from '../utils/candidate';
+import { deleteFile } from '../utils/fileUpload';
 
-// Validation schema for creating an applicant
-const createApplicantSchema = Joi.object({
-  firstName: Joi.string().required().trim(),
-  lastName: Joi.string().required().trim(),
-  email: Joi.string().email().required().trim().lowercase(),
-  phone: Joi.string().trim(),
-  linkedInUrl: Joi.string().uri().trim(),
-  portfolioUrl: Joi.string().uri().trim(),
-  currentCompany: Joi.string().trim(),
-  currentPosition: Joi.string().trim(),
-  yearsOfExperience: Joi.number().min(0),
-  education: Joi.object({
-    degree: Joi.string().trim(),
-    institution: Joi.string().trim(),
-    graduationYear: Joi.number().integer().min(1900).max(new Date().getFullYear() + 10)
-  }),
-  status: Joi.string().valid(
-    'new', 'screening', 'interview', 'technical', 'offer', 'hired', 'rejected'
-  ).default('new'),
-  notes: Joi.string(),
-  tags: Joi.array().items(Joi.string().trim()),
-  resumeId: Joi.string().required().hex().length(24),
-});
 
-// Validation schema for updating an applicant
-const updateApplicantSchema = Joi.object({
+// Validation schema for applicant
+const applicantSchema = Joi.object({
   firstName: Joi.string().trim(),
   lastName: Joi.string().trim(),
   email: Joi.string().email().trim().lowercase(),
@@ -47,7 +27,7 @@ const updateApplicantSchema = Joi.object({
     graduationYear: Joi.number().integer().min(1900).max(new Date().getFullYear() + 10)
   }),
   status: Joi.string().valid(
-    'new', 'screening', 'interview', 'technical', 'offer', 'hired', 'rejected'
+    'new', 'reviewing', 'screening', 'interview', 'technical', 'offer', 'hired', 'rejected'
   ),
   notes: Joi.string(),
   tags: Joi.array().items(Joi.string().trim()),
@@ -168,7 +148,7 @@ export const createApplicantByJob = async (req: Request, res: Response): Promise
     const recruiterId = (req as any).recruiterId;
     
     // Validate request body
-    const { error, value } = createApplicantSchema.validate(req.body, { abortEarly: false });
+    const { error, value } = applicantSchema.validate(req.body, { abortEarly: false });
     
     if (error) {
       res.status(400).json({ 
@@ -259,7 +239,7 @@ export const updateApplicant = async (req: Request, res: Response): Promise<void
     const recruiterId = (req as any).recruiterId;
     
     // Validate request body
-    const { error, value } = updateApplicantSchema.validate(req.body, { abortEarly: false });
+    const { error, value } = applicantSchema.validate(req.body, { abortEarly: false });
     
     if (error) {
       res.status(400).json({ 
@@ -341,7 +321,7 @@ export const updateApplicantStatus = async (req: Request, res: Response): Promis
     // Validate status
     const { status } = req.body;
     
-    if (!status || !['new', 'screening', 'interview', 'technical', 'offer', 'hired', 'rejected'].includes(status)) {
+    if (!status || !['new', 'screening', 'reviewing', 'interview', 'technical', 'offer', 'hired', 'rejected'].includes(status)) {
       res.status(400).json({ message: 'Invalid status value' });
       return;
     }
@@ -384,7 +364,7 @@ export const bulkUpdateApplicantStatus = async (req: Request, res: Response): Pr
       return;
     }
     
-    if (!status || !['new', 'screening', 'interview', 'technical', 'offer', 'hired', 'rejected'].includes(status)) {
+    if (!status || !['new', 'screening', 'reviewing', 'interview', 'technical', 'offer', 'hired', 'rejected'].includes(status)) {
       res.status(400).json({ message: 'Invalid status value' });
       return;
     }
@@ -415,7 +395,7 @@ export const bulkUpdateApplicantStatus = async (req: Request, res: Response): Pr
  */
 export const getAllApplicants = async (req: Request, res: Response): Promise<void> => {
   try {
-    const applicants = await Applicant.find().populate('resume').populate('jobPost');
+    const applicants = await Applicant.find();
     res.status(200).json({ applicants });
   } catch (error) {
     logger.error('Error getting all applicants:', error);
@@ -438,12 +418,18 @@ export const createApplicant = async (req: Request, res: Response): Promise<void
       yearsOfExperience,
       location,
       skills,
-      additionalNote
+      additionalNote,
+      recruiterId // Added recruiterId from request body
     } = req.body;
 
     // Basic validation
     if (!fullName || !email || !positionAppliedFor) {
       res.status(400).json({ message: 'Full name, email, and position applied for are required.' });
+      return;
+    }
+
+    if (!recruiterId) {
+      res.status(400).json({ message: 'Recruiter ID is required.' });
       return;
     }
 
@@ -456,7 +442,8 @@ export const createApplicant = async (req: Request, res: Response): Promise<void
       yearsOfExperience,
       location,
       skills,
-      additionalNote
+      additionalNote,
+      recruiter: recruiterId // Set the recruiter field with the provided ID
     });
 
     await newApplicant.save();
@@ -464,5 +451,93 @@ export const createApplicant = async (req: Request, res: Response): Promise<void
   } catch (error) {
     logger.error('Error creating applicant:', error);
     res.status(500).json({ message: 'Error creating applicant' });
+  }
+};
+
+/**
+ * Upload a resume, extract information, and create an applicant
+ * @route POST /api/applicants/upload-resume
+ * @access Public
+ */
+export const uploadResumeAndCreateApplicant = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { recruiterId } = req.body;
+    if (!req.file) {
+      res.status(400).json({ message: 'No file uploaded' });
+      return;
+    }
+    if (!recruiterId) {
+      res.status(400).json({ message: 'Recruiter ID is required.' });
+      return;
+    }
+    const file = req.file;
+    
+    // Extract text from the uploaded file
+    let parsedText = '';
+    try {
+      parsedText = await extractTextFromFile(file.path, file.mimetype);
+      parsedText = cleanExtractedText(parsedText);
+    } catch (error) {
+      await deleteFile(file.path);
+      logger.error('Error extracting text from resume:', error);
+      res.status(400).json({ message: 'Failed to extract text from the uploaded file' });
+      return;
+    }
+
+    // Extract candidate details from parsed text
+    const candidateDetails = await extractCandidateDetails(parsedText);
+    // Create a new resume record with candidate details
+    const resume = new Resume({
+      fileName: file.filename,
+      originalFileName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      filePath: file.path,
+      parsedText,
+      isProcessed: true,
+      recruiter: recruiterId,
+      candidateDetails
+    });
+
+    // Save the resume to the database
+    await resume.save();
+    
+    // Convert years of experience from string to number if possible
+    let yearsOfExperience;
+    if (candidateDetails.experience) {
+      const yearsMatch = candidateDetails.experience.match(/\d+/);
+      if (yearsMatch) {
+        yearsOfExperience = parseInt(yearsMatch[0], 10);
+      }
+    }
+    
+    // Create a new applicant using the extracted information
+    const newApplicant = new Applicant({
+      fullName: candidateDetails.name,
+      email: candidateDetails.email,
+      phone: candidateDetails.phone,
+      positionAppliedFor: req.body.positionAppliedFor || 'Not specified',
+      yearsOfExperience,
+      skills: candidateDetails.skills,
+      additionalNote: candidateDetails.summary,
+      resume: resume._id,
+      status: 'new',
+      recruiter: recruiterId // Add the recruiter ID from the request body
+    });
+    
+    await newApplicant.save();
+
+    res.status(201).json({
+      message: 'Resume uploaded and applicant created successfully',
+      applicant: newApplicant,
+      resume: {
+        _id: resume._id,
+        fileName: resume.fileName,
+        originalFileName: resume.originalFileName
+      }
+    });
+  } catch (error) {
+    logger.error('Error uploading resume and creating applicant:', error);
+    res.status(500).json({ message: 'Error processing resume and creating applicant' });
   }
 };

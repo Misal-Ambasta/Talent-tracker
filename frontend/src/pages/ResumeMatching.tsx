@@ -34,7 +34,6 @@ const ResumeMatching = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const bulkResumeComponentRef = useRef<BulkResumeUploadRef>(null);
   const dispatch = useAppDispatch();
-console.log("newJobTitle",  newJobTitle, jobDescription)
 
   // Add a useEffect to update job description when a job is selected
   useEffect(() => {
@@ -74,7 +73,6 @@ console.log("newJobTitle",  newJobTitle, jobDescription)
           title: jobMode === 'new' ? newJobTitle : undefined,
           description: jobDescription
         });
-        console.log("response: ", response)
         // Store the processed files
         setProcessedResumes(selectedFiles);
         setBulkUploadComplete(true);

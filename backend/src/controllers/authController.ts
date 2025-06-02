@@ -23,7 +23,6 @@ export const registerRecruiter = async (req: Request, res: Response): Promise<vo
   }
 
   const { name, email, password } = value;
-  console.log(email,"email");
   try {
     const existing = await Recruiter.findOne({ email });
     if (existing) {
