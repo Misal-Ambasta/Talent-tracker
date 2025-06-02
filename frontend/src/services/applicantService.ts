@@ -11,6 +11,7 @@ export interface ApplicantData {
   location?: string;
   skills?: string[];
   additionalNote?: string;
+  recruiterId? : string,
   status?: 'new' | 'reviewing' | 'interview' | 'offer' | 'rejected';
 }
 

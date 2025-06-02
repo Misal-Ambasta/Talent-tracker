@@ -81,7 +81,7 @@ const AudioUploadComponent = ({ onTranscriptionComplete }: AudioUploadComponentP
       } else if (uploadInterviewAudioThunk.rejected.match(resultAction)) {
         toast({
           title: 'Transcription failed',
-          description: resultAction.payload || 'Unable to retrieve transcription after processing.',
+          description: resultAction.payload as React.ReactNode || 'Unable to retrieve transcription after processing.',
           variant: 'destructive',
         });
       }

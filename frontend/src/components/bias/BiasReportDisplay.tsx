@@ -13,7 +13,7 @@ interface BiasDetection {
   _id: string;
 }
 
-interface BiasReportData {
+export interface BiasReportData {
   originalText: string;
   contentType: string;
   detections: BiasDetection[];
@@ -23,7 +23,7 @@ interface BiasReportData {
   _id: string;
   createdAt: string;
   updatedAt: string;
-  __v: number;
+  __v?: number;
 }
 
 interface BiasReportDisplayProps {
@@ -159,7 +159,7 @@ const BiasReportDisplay = ({ report, onExport, onReAnalyze }: BiasReportDisplayP
           </CardHeader>
           <CardContent className="space-y-4">
             {report.detections.map((detection, index) => (
-              <div key={detection._id || index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <div key={detection._id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     {getSeverityIcon(detection.confidence)}

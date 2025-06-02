@@ -75,9 +75,9 @@ const AIAssistant = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center">
               <Brain className="w-8 h-8 mr-3 text-blue-600" />
-              AI Assistant
+              Bias Assistant
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">Chat summarization and bias detection tools</p>
+            <p className="text-gray-600 dark:text-gray-400">Bias detection summarization tool</p>
           </div>
         </div>
 
@@ -104,6 +104,7 @@ const AIAssistant = () => {
               <div>
                 {currentChatSummary ? (
                   <ChatSummaryDisplay 
+                  // @ts-ignore
                     summary={currentChatSummary}
                     onSave={(editedSummary) => {
                       // In a real implementation, we would dispatch an action to update the summary
@@ -145,6 +146,7 @@ const AIAssistant = () => {
               <div>
                 {currentBiasDetection ? (
                   <BiasReportDisplay 
+                  // @ts-ignore
                     report={currentBiasDetection}
                     onExport={() => {
                       toast({
