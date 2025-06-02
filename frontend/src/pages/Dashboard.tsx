@@ -6,11 +6,19 @@ import { Progress } from "@/components/ui/progress";
 import { useNavigate } from 'react-router-dom';
 import { Users, Briefcase, FileText, TrendingUp, Plus, Brain } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAppSelector } from "../hooks/reduxHooks";
+import { useAppSelector, useAppDispatch } from "../hooks/reduxHooks";
+import { getJobs } from "../slices/jobsSlice";
+import { useEffect } from "react";
 
 const Dashboard = () => {
   const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    // Fetch jobs after successful login
+    dispatch(getJobs());
+  }, [dispatch]);
 
   const handleNewJobClick = () => {
     navigate('/jobs?create=true');

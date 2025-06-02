@@ -110,3 +110,41 @@ export const getJobMatchResults = async (jobId: string): Promise<{ matches: Resu
   const response = await axiosInstance.get(`${API_URLS.JOBS}/${jobId}/matches`);
   return response.data;
 };
+
+/**
+ * Upload multiple resumes in batch
+ */
+export const bulkUploadResumes = async ({ 
+  resumeFiles, 
+  jobMode, 
+  jobId, 
+  title, 
+  description 
+}: {
+  resumeFiles: File[],
+  jobMode: string,
+  jobId?: string,
+  title?: string,
+  description?: string
+}): Promise<any> => {
+  const formData = new FormData();
+  
+  // Append each file to the formData with the same field name 'resumes'
+  resumeFiles.forEach(file => {
+    formData.append('resumes', file);
+  });
+  
+  // Append other data
+  if (jobMode) formData.append('jobMode', jobMode);
+  if (jobId) formData.append('jobId', jobId);
+  if (title) formData.append('title', title);
+  if (description) formData.append('description', description);
+
+  const response = await axiosInstance.post(`${API_URLS.RESUMES}/bulk-upload`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  return response.data;
+};

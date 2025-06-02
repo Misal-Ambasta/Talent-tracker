@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, X, AlertCircle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { uploadResume } from '@/services/resumeService';
+import { bulkUploadResumes } from '@/services/resumeService';
 
 interface BulkResumeUploadProps {
   onUploadComplete: (results: any[]) => void;
@@ -15,7 +15,13 @@ interface BulkResumeUploadProps {
   description?: string;
 }
 
-const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description }: BulkResumeUploadProps) => {
+// Define the ref interface
+export interface BulkResumeUploadRef {
+  getSelectedFiles: () => File[];
+  handleUpload: () => Promise<void>;
+}
+
+const BulkResumeUpload = forwardRef<BulkResumeUploadRef, BulkResumeUploadProps>(({ onUploadComplete, jobMode, jobId, title, description }, ref) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -24,7 +30,17 @@ const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description
   const MAX_FILES = 10;
   const ACCEPTED_TYPES = ['.pdf', '.doc', '.docx'];
 
+  // Expose methods to parent component via ref
+  useImperativeHandle(ref, () => ({
+    getSelectedFiles: () => selectedFiles,
+    handleUpload
+  }));
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
     const files = Array.from(event.target.files || []);
     
     if (selectedFiles.length + files.length > MAX_FILES) {
@@ -56,6 +72,9 @@ const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description
         description: `${validFiles.length} resume(s) added for processing`,
       });
     }
+    
+    // Reset the input value to allow selecting the same file again
+    event.target.value = '';
   };
 
   const removeFile = (index: number) => {
@@ -75,33 +94,40 @@ const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description
     setIsUploading(true);
     setUploadProgress(0);
 
-    const results: any[] = [];
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      try {
-        const res = await uploadResume({
-          resumeFile: file,
-          jobMode,
-          jobId,
-          title,
-          description
-        });
-        results.push(res);
-      } catch (err) {
-        toast({
-          title: "Upload error",
-          description: `${file.name} failed to upload`,
-          variant: "destructive",
-        });
-      }
-      setUploadProgress(Math.round(((i + 1) / selectedFiles.length) * 100));
+    try {
+      // Use the bulk upload service instead of individual uploads
+      const response = await bulkUploadResumes({
+        resumeFiles: selectedFiles,
+        jobMode,
+        jobId,
+        title,
+        description
+      });
+      
+      setIsUploading(false);
+      setUploadProgress(100);
+      
+      // Pass both the files and the response to the parent component
+      onUploadComplete(selectedFiles.map(file => ({
+        file,
+        matchResults: response.matchResults || []
+      })));
+      
+      toast({
+        title: "Upload complete",
+        description: `${selectedFiles.length} resumes processed successfully`,
+      });
+      
+      // Clear files after successful upload
+      setSelectedFiles([]);
+    } catch (error) {
+      setIsUploading(false);
+      toast({
+        title: "Upload failed",
+        description: "There was an error processing your resumes",
+        variant: "destructive",
+      });
     }
-    setIsUploading(false);
-    onUploadComplete(results);
-    toast({
-      title: "Upload complete",
-      description: `${selectedFiles.length} resumes processed successfully`,
-    });
   };
 
   const clearAll = () => {
@@ -139,7 +165,15 @@ const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description
               disabled={isUploading}
             />
             <label htmlFor="bulk-resume-upload">
-              <Button variant="outline" className="cursor-pointer" disabled={isUploading}>
+              <Button 
+                variant="outline" 
+                className="cursor-pointer" 
+                disabled={isUploading}
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById('bulk-resume-upload')?.click();
+                }}
+              >
                 Choose Files
               </Button>
             </label>
@@ -216,8 +250,8 @@ const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description
           </div>
         </div>
 
-        {/* Upload Button */}
-        <Button 
+        {/* Upload Button - Removing as requested */}
+        {/* <Button 
           onClick={handleUpload} 
           className="w-full" 
           disabled={selectedFiles.length === 0 || isUploading}
@@ -228,10 +262,12 @@ const BulkResumeUpload = ({ onUploadComplete, jobMode, jobId, title, description
           ) : (
             `Process ${selectedFiles.length} Resume${selectedFiles.length !== 1 ? 's' : ''}`
           )}
-        </Button>
+        </Button> */}
       </CardContent>
     </Card>
   );
-};
+});
+
+BulkResumeUpload.displayName = "BulkResumeUpload";
 
 export default BulkResumeUpload;
