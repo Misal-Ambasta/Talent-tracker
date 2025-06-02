@@ -1,5 +1,6 @@
 import axiosInstance from '../utils/axiosInstance';
 import { API_URLS } from '../config/api';
+import { encryptData } from '../utils/encryption';
 
 interface LoginCredentials {
   email: string;
@@ -25,17 +26,27 @@ interface AuthResponse {
 
 /**
  * Login a user with email and password
+ * Encrypts sensitive credentials before sending to the server
  */
 export const loginUser = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  const response = await axiosInstance.post(`${API_URLS.AUTH}/login`, credentials);
+  // Encrypt the credentials
+  const encryptedData = encryptData(credentials);
+  
+  // Send only the encrypted data
+  const response = await axiosInstance.post(`${API_URLS.AUTH}/login`, { encryptedData });
   return response.data;
 };
 
 /**
  * Register a new user
+ * Encrypts sensitive user data before sending to the server
  */
 export const registerUser = async (userData: RegisterData): Promise<AuthResponse> => {
-  const response = await axiosInstance.post(`${API_URLS.AUTH}/register`, userData);
+  // Encrypt the user data
+  const encryptedData = encryptData(userData);
+  
+  // Send only the encrypted data
+  const response = await axiosInstance.post(`${API_URLS.AUTH}/register`, { encryptedData });
   return response.data;
 };
 

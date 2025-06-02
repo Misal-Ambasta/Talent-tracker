@@ -39,7 +39,7 @@ const App = () => {
               <Route
                 path="/login"
                 element={
-                  <ProtectedRoute requireAuth={false}>
+                  <ProtectedRoute requireAuth={false} allowAuthenticatedAccess={true}>
                     <Login />
                   </ProtectedRoute>
                 }
@@ -47,7 +47,7 @@ const App = () => {
               <Route
                 path="/register"
                 element={
-                  <ProtectedRoute requireAuth={false}>
+                  <ProtectedRoute requireAuth={false} allowAuthenticatedAccess={true}>
                     <Register />
                   </ProtectedRoute>
                 }
@@ -103,7 +103,7 @@ const App = () => {
                 }
               />
               <Route
-                path="/ai-assistant"
+                path="/bias-detection"
                 element={
                   <ProtectedRoute>
                     <AIAssistant />

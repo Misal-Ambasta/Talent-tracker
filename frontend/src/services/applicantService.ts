@@ -48,7 +48,7 @@ export const fetchApplicantById = async (applicantId: string): Promise<Applicant
  */
 export const createApplicant = async (applicantData: ApplicantData): Promise<Applicant> => {
   const response = await axiosInstance.post(`${API_URLS.APPLICANTS}`, applicantData);
-  return response.data.applicant;
+  return response.data;
 };
 
 /**

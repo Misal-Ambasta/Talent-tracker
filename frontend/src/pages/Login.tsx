@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -18,38 +17,75 @@ const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const dispatch = useAppDispatch();
-  const { loading: isLoading, error } = useAppSelector((state) => state.auth);
+  const { loading: isLoading, error, isAuthenticated } = useAppSelector((state) => state.auth);
 
-  // Clear any auth errors when component mounts or unmounts
+  // Clear any auth errors when component mounts
   useEffect(() => {
     dispatch(clearError());
-    return () => {
-      dispatch(clearError());
-    };
   }, [dispatch]);
 
-  // Show error toast when error occurs
+  // If user is already authenticated and tries to access login directly, redirect them
   useEffect(() => {
-    if (error) {
+    if (isAuthenticated && !isLoading) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
+  console.log("error", error);
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Prevent multiple submissions
+    if (isLoading) return;
+    
+    // Basic validation
+    if (!email.trim() || !password.trim()) {
       toast({
-        title: "Login failed",
-        description: error,
+        title: "Validation Error",
+        description: "Please fill in all fields",
         variant: "destructive",
       });
+      return;
     }
-  }, [error, toast]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const result = await dispatch(login({ email, password }));
-    
-    if (login.fulfilled.match(result)) {
+    try {
+      const result = await dispatch(login({ email, password }));
+      
+      if (login.fulfilled.match(result)) {
+        // Success toast
+        toast({
+          title: "Login successful",
+          description: "Welcome back to TalentTracker!",
+        });
+        
+        // Navigate after a delay to show the success message
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
+      } else if (login.rejected.match(result)) {
+        // Handle error immediately from the thunk result
+        const errorMessage = result.payload as string || "Login failed. Please try again.";
+        
+        // Show toast immediately
+        toast({
+          title: "Login failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        
+        console.log("Login failed:", errorMessage);
+      }
+    } catch (error) {
+      // Fallback error handling
+      console.error("Unexpected login error:", error);
       toast({
-        title: "Login successful",
-        description: "Welcome back to TalentTracker!",
+        title: "Login failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
       });
-      // Navigation is handled by ProtectedRoute component
     }
   };
 
@@ -75,7 +111,7 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -85,6 +121,7 @@ const Login = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
               </div>
               <div className="space-y-2">
@@ -95,9 +132,14 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isLoading}
+              >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>

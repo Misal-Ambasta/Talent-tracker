@@ -9,6 +9,23 @@ import { extractTextFromFile, cleanExtractedText } from '../utils/textExtraction
 import { extractCandidateDetails } from '../utils/candidate';
 import { deleteFile } from '../utils/fileUpload';
 
+/**
+ * Format phone number to XXX-XXX-XXXX pattern
+ * @param phone The phone number to format
+ * @returns Formatted phone number
+ */
+const formatPhoneNumber = (phone: string): string => {
+  // Remove all non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  
+  // Format as XXX-XXX-XXXX if we have 10 digits
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  
+  // Return original if not 10 digits
+  return phone;
+};
 
 // Validation schema for applicant
 const applicantSchema = Joi.object({
@@ -395,7 +412,7 @@ export const bulkUpdateApplicantStatus = async (req: Request, res: Response): Pr
  */
 export const getAllApplicants = async (req: Request, res: Response): Promise<void> => {
   try {
-    const applicants = await Applicant.find();
+    const applicants = await Applicant.find().populate('resume').populate('jobPost');
     res.status(200).json({ applicants });
   } catch (error) {
     logger.error('Error getting all applicants:', error);
@@ -437,7 +454,7 @@ export const createApplicant = async (req: Request, res: Response): Promise<void
     const newApplicant = new Applicant({
       fullName,
       email,
-      phone,
+      phone: formatPhoneNumber(phone), // Format phone number
       positionAppliedFor,
       yearsOfExperience,
       location,
@@ -486,6 +503,29 @@ export const uploadResumeAndCreateApplicant = async (req: Request, res: Response
 
     // Extract candidate details from parsed text
     const candidateDetails = await extractCandidateDetails(parsedText);
+    
+    // Upload file to Cloudinary
+    let cloudinaryResult;
+    try {
+      // Import the uploadToCloudinary function
+      const { uploadToCloudinary } = await import('../config/cloudinary');
+      
+      // Upload the file to Cloudinary
+      cloudinaryResult = await uploadToCloudinary(file.path, {
+        folder: 'resumes',
+        public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+        resource_type: 'raw'
+      });
+      console.log(cloudinaryResult)
+      // Delete the local file after successful upload to Cloudinary
+      await deleteFile(file.path);
+      
+    } catch (cloudinaryError) {
+      logger.error('Error uploading to Cloudinary:', cloudinaryError);
+      // Continue with local file if Cloudinary upload fails
+      logger.info('Continuing with local file storage as fallback');
+    }
+    
     // Create a new resume record with candidate details
     const resume = new Resume({
       fileName: file.filename,
@@ -496,7 +536,13 @@ export const uploadResumeAndCreateApplicant = async (req: Request, res: Response
       parsedText,
       isProcessed: true,
       recruiter: recruiterId,
-      candidateDetails
+      candidateDetails,
+      // Add Cloudinary information if available
+      cloudinary: cloudinaryResult ? {
+        publicId: cloudinaryResult.public_id,
+        url: cloudinaryResult.secure_url,
+        resourceType: cloudinaryResult.resource_type
+      } : undefined
     });
 
     // Save the resume to the database
@@ -533,10 +579,15 @@ export const uploadResumeAndCreateApplicant = async (req: Request, res: Response
       resume: {
         _id: resume._id,
         fileName: resume.fileName,
-        originalFileName: resume.originalFileName
+        originalFileName: resume.originalFileName,
+        cloudinaryUrl: cloudinaryResult?.secure_url
       }
     });
   } catch (error) {
+    // Clean up the local file if there was an error
+    if (req.file) {
+      await deleteFile(req.file.path);
+    }
     logger.error('Error uploading resume and creating applicant:', error);
     res.status(500).json({ message: 'Error processing resume and creating applicant' });
   }

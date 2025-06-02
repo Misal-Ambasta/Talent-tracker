@@ -221,6 +221,12 @@ export const downloadResume = async (req: Request, res: Response): Promise<void>
       res.status(404).json({ message: 'Resume not found' });
       return;
     }
+    
+    // Check if the resume has a Cloudinary URL
+    if (resume.cloudinary && resume.cloudinary.url) {
+      // Redirect to the Cloudinary URL
+      return res.redirect(resume.cloudinary.url);
+    }
 
     const filePath = getResumePath(resume.fileName);
 
@@ -252,24 +258,38 @@ export const deleteResume = async (req: Request, res: Response): Promise<void> =
   try {
     const { resumeId } = req.params;
     const recruiterId = (req as any).recruiterId;
-
+    
     const resume = await Resume.findOne({
       _id: resumeId,
-      recruiter: recruiterId,
+      recruiter: recruiterId
     });
-
+    
     if (!resume) {
       res.status(404).json({ message: 'Resume not found' });
       return;
     }
-
-    // Delete the file
+    
+    // Delete the file from Cloudinary if it exists
+    if (resume.cloudinary && resume.cloudinary.publicId) {
+      try {
+        const { deleteCloudinaryFile } = await import('../config/cloudinary');
+        await deleteCloudinaryFile(resume.cloudinary.publicId);
+        logger.info(`Successfully deleted file from Cloudinary: ${resume.cloudinary.publicId}`);
+      } catch (cloudinaryError) {
+        logger.error(`Error deleting file from Cloudinary: ${resume.cloudinary.publicId}`, cloudinaryError);
+        // Continue with local file deletion even if Cloudinary deletion fails
+      }
+    }
+    
+    // Delete the file from the filesystem if it exists
     const filePath = getResumePath(resume.fileName);
-    await deleteFile(filePath);
-
-    // Delete the database record
+    if (fs.existsSync(filePath)) {
+      await deleteFile(filePath);
+    }
+    
+    // Delete the resume from the database
     await Resume.findByIdAndDelete(resumeId);
-
+    
     res.status(200).json({ message: 'Resume deleted successfully' });
   } catch (error) {
     logger.error('Error deleting resume:', error);
@@ -610,7 +630,8 @@ const createJobIfNeeded = async (
 const processValidFile = async (
   validatedFile: ValidatedFile,
   file: Express.Multer.File,
-  recruiterId: string
+  recruiterId: string,
+  cloudinaryResult?: any
 ): Promise<ProcessedResume> => {
   try {
     // Extract text from file
@@ -649,6 +670,12 @@ const processValidFile = async (
       recruiter: recruiterId,
       isProcessed: true,
       candidateDetails,
+      // Add Cloudinary information if available
+      cloudinary: cloudinaryResult ? {
+        publicId: cloudinaryResult.public_id,
+        url: cloudinaryResult.secure_url,
+        resourceType: cloudinaryResult.resource_type
+      } : undefined
     });
 
     await resume.save();
@@ -745,12 +772,40 @@ export const batchUploadResumes = async (req: Request, res: Response): Promise<v
     const BATCH_SIZE = 3;
     const processedResults: ProcessedResume[] = [];
 
+    // Import the uploadToCloudinary function
+    const { uploadToCloudinary } = await import('../config/cloudinary');
+
     for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
       const batch = validFiles.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map(file => {
+        batch.map(async file => {
           const validatedFile = validationResult.valid.find(v => v.path === file.path)!;
-          return processValidFile(validatedFile, file, recruiterId);
+          
+          // Try to upload to Cloudinary first
+          let cloudinaryResult;
+          try {
+            cloudinaryResult = await uploadToCloudinary(file.path, {
+              folder: 'resumes',
+              public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+              resource_type: 'raw'
+            });
+            logger.info(`Successfully uploaded ${file.originalname} to Cloudinary`);
+          } catch (cloudinaryError) {
+            logger.error(`Error uploading ${file.originalname} to Cloudinary:`, cloudinaryError);
+            // Continue with local file if Cloudinary upload fails
+          }
+          
+          // Process the file with Cloudinary information if available
+          const result = await processValidFile(validatedFile, file, recruiterId, cloudinaryResult);
+          
+          // If Cloudinary upload was successful, delete the local file
+          if (cloudinaryResult) {
+            await deleteFile(file.path).catch(err => 
+              logger.error(`Error deleting local file ${file.path} after Cloudinary upload:`, err)
+            );
+          }
+          
+          return result;
         })
       );
       processedResults.push(...batchResults);

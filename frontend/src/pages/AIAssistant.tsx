@@ -1,7 +1,12 @@
-
 import { useState, useEffect } from "react";
 import Navigation from "@/components/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Brain, MessageSquare, Shield } from "lucide-react";
 import ChatInputComponent from "@/components/chat/ChatInputComponent";
@@ -10,24 +15,20 @@ import BiasCheckComponent from "@/components/bias/BiasCheckComponent";
 import BiasReportDisplay from "@/components/bias/BiasReportDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { useAppDispatch, useAppSelector } from "../hooks/reduxHooks";
-import { 
-  summarizeChatConversation, 
-  clearCurrentChatSummary, 
+import {
+  summarizeChatConversation,
+  clearCurrentChatSummary,
   clearCurrentBiasDetection,
-  clearAiError
+  clearAiError,
 } from "../slices/aiResultsSlice";
 
 const AIAssistant = () => {
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   const { toast } = useToast();
-  
+
   const dispatch = useAppDispatch();
-  const { 
-    currentChatSummary, 
-    currentBiasDetection,
-    loading, 
-    error 
-  } = useAppSelector((state) => state.aiResults);
+  const { currentChatSummary, currentBiasDetection, loading, error } =
+    useAppSelector((state) => state.aiResults);
 
   // Handle errors
   useEffect(() => {
@@ -59,25 +60,29 @@ const AIAssistant = () => {
       return;
     }
 
-    dispatch(summarizeChatConversation({
-      chatText,
-      applicantId: undefined // Optional parameter, not used in this context
-    }));
+    dispatch(
+      summarizeChatConversation({
+        chatText,
+        applicantId: undefined, // Optional parameter, not used in this context
+      })
+    );
   };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
-      
+
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center">
               <Brain className="w-8 h-8 mr-3 text-blue-600" />
-              Bias Assistant
+              Bias Detection
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">Bias detection summarization tool</p>
+            <p className="text-gray-600 dark:text-gray-400">
+              Bias detection summarization tool
+            </p>
           </div>
         </div>
 
@@ -96,15 +101,15 @@ const AIAssistant = () => {
           <TabsContent value="chat-summary" className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-8">
               <div>
-                <ChatInputComponent 
+                <ChatInputComponent
                   onSummarize={handleChatSummarization}
                   isProcessing={loading}
                 />
               </div>
               <div>
                 {currentChatSummary ? (
-                  <ChatSummaryDisplay 
-                  // @ts-ignore
+                  <ChatSummaryDisplay
+                    // @ts-ignore
                     summary={currentChatSummary}
                     onSave={(editedSummary) => {
                       // In a real implementation, we would dispatch an action to update the summary
@@ -123,7 +128,8 @@ const AIAssistant = () => {
                         Ready for Chat Analysis
                       </h3>
                       <p className="text-gray-600 dark:text-gray-400">
-                        Paste your chat transcript to generate AI-powered summaries with key insights.
+                        Paste your chat transcript to generate AI-powered
+                        summaries with key insights.
                       </p>
                     </CardContent>
                   </Card>
@@ -135,18 +141,18 @@ const AIAssistant = () => {
           <TabsContent value="bias-detection" className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-8">
               <div>
-                <BiasCheckComponent 
+                <BiasCheckComponent
                   autoSuggestions={[
-                    "Looking for digital natives who can keep up",
-                    "Must be a culture fit with strong communication",
-                    "Seeking recent graduates with fresh perspectives"
+                    "While our senior employees bring experience, they often struggle to adapt to new technologies and fast-paced systems. We’ve found that younger team members are better suited for today’s dynamic, digital-first work environment.",
+                    "When selecting candidates for leadership roles, we tend to look for assertiveness and decisiveness — traits we've often seen in our male employees. While female candidates bring a nurturing approach, we believe high-pressure environments are better suited for those who can take bold, swift action.",
+                    "While the new neighborhood is developing nicely, some residents have expressed concerns about the recent influx of people from certain urban areas. We’ve increased patrols to ensure it remains a safe and family-friendly community.",
                   ]}
                 />
               </div>
               <div>
                 {currentBiasDetection ? (
-                  <BiasReportDisplay 
-                  // @ts-ignore
+                  <BiasReportDisplay
+                    // @ts-ignore
                     report={currentBiasDetection}
                     onExport={() => {
                       toast({
@@ -170,7 +176,8 @@ const AIAssistant = () => {
                         Ready for Bias Analysis
                       </h3>
                       <p className="text-gray-600 dark:text-gray-400">
-                        Enter text to analyze for potential bias and get detailed recommendations.
+                        Enter text to analyze for potential bias and get
+                        detailed recommendations.
                       </p>
                     </CardContent>
                   </Card>

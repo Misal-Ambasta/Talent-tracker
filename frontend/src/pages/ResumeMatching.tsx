@@ -284,8 +284,8 @@ const ResumeMatching = () => {
           )}
           
           {/* Input Section */}
-          <div className={uploadMode === "single" ? "lg:col-span-2" : "lg:col-span-1"}>
-            <Card className="animate-fade-in">
+          <div className={`${uploadMode === "single" ? "lg:col-span-2" : "lg:col-span-1"}`}>
+            <Card className="animate-fade-in pb-8">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <FileText className="w-5 h-5 mr-2" />

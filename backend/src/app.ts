@@ -20,7 +20,21 @@ app.use(helmet());
 
 // Apply CORS
 app.use(cors({
-  origin: config.cors.origin,
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = config.cors.origin;
+    const originIsAllowed = Array.isArray(allowedOrigins)
+      ? allowedOrigins.indexOf(origin) !== -1
+      : origin === allowedOrigins;
+      
+    if (originIsAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 

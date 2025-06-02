@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Users, Briefcase, FileText, Brain, MessageSquare, BarChart3, Menu, Bot } from "lucide-react";
+import { Users, Briefcase, FileText, Brain, MessageSquare, BarChart3, Menu, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppDispatch } from "@/hooks/reduxHooks";
@@ -26,7 +26,7 @@ const Navigation = () => {
     { href: "/applicants", label: "Applicants", icon: Users },
     { href: "/resume-matching", label: "AI Matching", icon: Brain },
     { href: "/interview-feedback", label: "Interviews", icon: MessageSquare },
-    { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
+    { href: "/bias-detection", label: "Bias Detection", icon: Shield },
   ];
 
   const NavContent = () => (
