@@ -18,6 +18,10 @@ An end-to-end, AI-powered Applicant Tracking System designed for recruiters to e
 
 ---
 
+### Deployed on:  https://talent-tracker-roan.vercel.app/
+
+---
+
 ## Screenshots
 ![screencapture-localhost-8080-2025-06-02-21_07_47](https://github.com/user-attachments/assets/286dea3b-5666-4177-b35e-2620cf91e958)
 

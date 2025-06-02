@@ -516,7 +516,6 @@ export const uploadResumeAndCreateApplicant = async (req: Request, res: Response
         public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
         resource_type: 'raw'
       });
-      console.log(cloudinaryResult)
       // Delete the local file after successful upload to Cloudinary
       await deleteFile(file.path);
       
