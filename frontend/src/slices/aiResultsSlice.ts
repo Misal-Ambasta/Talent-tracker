@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { matchResumesToJob } from '../services/resumeService';
+import { matchResumesToJob, bulkUploadResumes } from '../services/resumeService';
 import { processInterviewAudio, getInterviewSummary, processInterviewText } from '../services/interviewService';
 import { summarizeChat } from '../services/chatService';
 import { analyzeTextForBias } from '../services/biasService';
@@ -219,6 +219,37 @@ export const uploadInterviewAudioThunk = createAsyncThunk(
   }
 );
 
+// Bulk upload thunk
+export const bulkUploadResumesThunk = createAsyncThunk(
+  'aiResults/bulkUploadResumes',
+  async ({
+    resumeFiles,
+    jobMode,
+    jobId,
+    title,
+    description
+  }: {
+    resumeFiles: File[],
+    jobMode: string,
+    jobId?: string,
+    title?: string,
+    description?: string
+  }, { rejectWithValue }) => {
+    try {
+      const response = await bulkUploadResumes({
+        resumeFiles,
+        jobMode,
+        jobId,
+        title,
+        description
+      });
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || { message: error.message });
+    }
+  }
+);
+
 const aiResultsSlice = createSlice({
   name: 'aiResults',
   initialState,
@@ -330,6 +361,22 @@ const aiResultsSlice = createSlice({
       .addCase(detectBiasInDocument.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      // Bulk Upload Resumes
+      .addCase(bulkUploadResumesThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(bulkUploadResumesThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        // If we have match results, add them to the resumeAnalysis array
+        if (action.payload.matchResults && action.payload.matchResults.length > 0) {
+          state.resumeAnalyses = action.payload.matchResults;
+        }
+      })
+      .addCase(bulkUploadResumesThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string || 'Failed to upload resumes';
       });
   },
 });
@@ -341,4 +388,5 @@ export const {
   clearCurrentChatSummary,
   clearCurrentBiasDetection,
 } = aiResultsSlice.actions;
+
 export default aiResultsSlice;

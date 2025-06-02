@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Navigation from "@/components/navigation";
-import BulkResumeUpload from "@/components/resume/BulkResumeUpload";
+import BulkResumeUpload, { BulkResumeUploadRef } from "@/components/resume/BulkResumeUpload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,8 @@ import { useAppDispatch, useAppSelector } from "../hooks/reduxHooks";
 import { Badge } from "@/components/ui/badge";
 import { Brain, Upload, FileText, TrendingUp, Star, Mail, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { uploadResume } from '@/services/resumeService';
+import { uploadResume, bulkUploadResumes } from '@/services/resumeService';
+import { bulkUploadResumesThunk } from "../slices/aiResultsSlice";
 
 const ResumeMatching = () => {
   const [uploadMode, setUploadMode] = useState("bulk");
@@ -27,10 +28,23 @@ const ResumeMatching = () => {
   const [singleResumeUploaded, setSingleResumeUploaded] = useState(false);
   const [singleResumeFile, setSingleResumeFile] = useState<File | null>(null);
   const { jobs, loading, error } = useAppSelector((state) => state.jobs);
+  const { loading: aiLoading } = useAppSelector((state) => state.aiResults);
   const [bulkUploadComplete, setBulkUploadComplete] = useState(false);
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
+  const bulkResumeComponentRef = useRef<BulkResumeUploadRef>(null);
+  const dispatch = useAppDispatch();
+console.log("newJobTitle",  newJobTitle, jobDescription)
 
+  // Add a useEffect to update job description when a job is selected
+  useEffect(() => {
+    if (jobMode === "existing" && selectedJob) {
+      const job = jobs.find(j => j.title === selectedJob);
+      if (job) {
+        setJobDescription(job.description);
+      }
+    }
+  }, [selectedJob, jobMode, jobs]);
 
   const handleMatch = async () => {
     const jobTitle = jobMode === "existing" ? selectedJob : newJobTitle;
@@ -42,6 +56,55 @@ const ResumeMatching = () => {
       });
       return;
     }
+    
+    // For bulk mode, check if files are selected but not yet uploaded
+    if (uploadMode === "bulk" && !bulkUploadComplete && bulkResumeComponentRef.current?.getSelectedFiles()?.length > 0) {
+      // Files are selected but not uploaded, so handle the upload first
+      setIsMatching(true);
+      
+      try {
+        // Get selected files from the BulkResumeUpload component
+        const selectedFiles = bulkResumeComponentRef.current.getSelectedFiles();
+        
+        // Use the bulk upload service directly
+        const response = await bulkUploadResumes({
+          resumeFiles: selectedFiles,
+          jobMode,
+          jobId: jobMode === 'existing' ? jobs.find(j => j.title === selectedJob)?._id : undefined,
+          title: jobMode === 'new' ? newJobTitle : undefined,
+          description: jobDescription
+        });
+        console.log("response: ", response)
+        // Store the processed files
+        setProcessedResumes(selectedFiles);
+        setBulkUploadComplete(true);
+        
+        // Update match results if available
+        if (response.matchResults && response.matchResults.length > 0) {
+          setMatchResults(response.matchResults);
+          toast({
+            title: "Upload and matching complete",
+            description: `${selectedFiles.length} resumes processed and matched successfully`,
+          });
+        } else {
+          toast({
+            title: "Upload complete",
+            description: `${selectedFiles.length} resumes uploaded successfully`,
+          });
+        }
+      } catch (error: any) {
+        toast({
+          title: "Upload failed",
+          description: error.message || "There was an error uploading your resumes",
+          variant: "destructive",
+        });
+      } finally {
+        setIsMatching(false);
+      }
+      return;
+    }
+    
+    // Check if resumes are uploaded before proceeding with matching
     if (!isUploadComplete()) {
       toast({
         title: "Error",
@@ -50,9 +113,12 @@ const ResumeMatching = () => {
       });
       return;
     }
+    
     setIsMatching(true);
-    if (uploadMode === "single" && singleResumeFile) {
-      try {
+    
+    try {
+      if (uploadMode === "single" && singleResumeFile) {
+        // Handle single resume upload and matching
         const res = await uploadResume({
           resumeFile: singleResumeFile,
           jobMode,
@@ -60,35 +126,67 @@ const ResumeMatching = () => {
           title: jobMode === 'new' ? newJobTitle : undefined,
           description: jobDescription
         });
+        
         setMatchResults(res.matchResults || []);
         toast({
           title: "Resume uploaded and matched",
           description: `${singleResumeFile.name} uploaded and matched successfully`,
         });
-      } catch (err) {
-        toast({
-          title: "Upload error",
-          description: `${singleResumeFile.name} failed to upload`,
-          variant: "destructive",
-        });
-      } finally {
-        setIsMatching(false);
+      } else if (uploadMode === "bulk" && processedResumes.length > 0) {
+        // Dispatch the bulk upload thunk with the already processed resumes
+        const result = await dispatch(bulkUploadResumesThunk({
+          resumeFiles: processedResumes,
+          jobMode,
+          jobId: jobMode === 'existing' ? jobs.find(j => j.title === selectedJob)?._id : undefined,
+          title: jobMode === 'new' ? newJobTitle : undefined,
+          description: jobDescription
+        })).unwrap();
+        
+        // Update the match results
+        if (result.matchResults && result.matchResults.length > 0) {
+          setMatchResults(result.matchResults);
+          toast({
+            title: "Matching complete",
+            description: `Found ${result.matchResults.length} candidates ranked by fit score`,
+          });
+        } else {
+          toast({
+            title: "Processing complete",
+            description: "Resumes were processed but no matches were found",
+          });
+        }
       }
-    } else if (uploadMode === "bulk") {
-      // Simulate AI processing for bulk (unchanged)
-      console.log("bulk");
+    } catch (error: any) {
+      toast({
+        title: "Matching failed",
+        description: error.message || "There was an error processing your resumes",
+        variant: "destructive",
+      });
+    } finally {
+      setIsMatching(false);
     }
   };
 
   const handleBulkResumeUploadComplete = (results: any[]) => {
-    // Collect all matchResults from the responses
-    const allMatches = results.flatMap(r => r.matchResults || []);
-    setMatchResults(allMatches);
+    // Set the bulk upload complete flag
     setBulkUploadComplete(true);
-    toast({
-      title: "Matching complete",
-      description: `Found ${allMatches.length} candidates ranked by fit score`,
-    });
+    
+    // If there are match results already, update the UI
+    if (results && results.length > 0) {
+      // Store the processed files for later matching
+      setProcessedResumes(results.map(r => r.file).filter(Boolean));
+      
+      // Update match results if available
+      const matchResults = results.flatMap(r => r.matchResults || []);
+      if (matchResults.length > 0) {
+        setMatchResults(matchResults);
+      }
+      
+      toast({
+        title: "Resumes uploaded",
+        description: `${results.length} resumes uploaded successfully. Click 'Start AI Matching' to analyze.`,
+      });
+    }
   };
 
   const handleSingleResumeUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +214,12 @@ const ResumeMatching = () => {
   };
 
   const isUploadComplete = () => {
-    return uploadMode === "bulk" ? bulkUploadComplete : !!singleResumeFile;
+    // For bulk mode, check either if upload is complete OR if files are selected
+    if (uploadMode === "bulk") {
+      return bulkUploadComplete || (bulkResumeComponentRef.current?.getSelectedFiles()?.length > 0);
+    }
+    // For single mode, check if a file is selected
+    return !!singleResumeFile;
   };
 
   const getScoreColor = (score: number) => {
@@ -173,11 +276,12 @@ const ResumeMatching = () => {
           {/* Conditional Upload Component */}
           {uploadMode === "bulk" && (
             <BulkResumeUpload 
-              onUploadComplete={handleBulkResumeUploadComplete}
+              onUploadComplete={handleBulkResumeUploadComplete} 
               jobMode={jobMode}
               jobId={jobMode === 'existing' ? jobs.find(j => j.title === selectedJob)?._id : undefined}
               title={jobMode === 'new' ? newJobTitle : undefined}
               description={jobDescription}
+              ref={bulkResumeComponentRef}
             />
           )}
           
