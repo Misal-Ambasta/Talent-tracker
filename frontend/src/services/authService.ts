@@ -54,9 +54,9 @@ export const registerUser = async (userData: RegisterData): Promise<AuthResponse
  * Logout the current user
  */
 export const logoutUser = async (): Promise<void> => {
-  await axiosInstance.post(`${API_URLS.AUTH}/logout`);
+  // await axiosInstance.post(`${API_URLS.AUTH}/logout`);
   // Clear token from localStorage
-  localStorage.removeItem('token');
+  localStorage.clear();
 };
 
 /**
