@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth';
 import { resumeUpload } from '../utils/fileUpload';
 import {
   uploadResume,
+  batchUploadResumes,
   getResumes,
   getResumeById,
   downloadResume,
@@ -18,6 +19,7 @@ router.use(authenticate);
 
 // Resume routes
 router.post('/resumes/upload', resumeUpload.single('resume'), uploadResume);
+router.post('/resumes/bulk-upload', resumeUpload.array('resumes', 10), batchUploadResumes);
 router.get('/resumes', getResumes);
 router.get('/resumes/:resumeId', getResumeById);
 router.get('/resumes/:resumeId/download', downloadResume);
