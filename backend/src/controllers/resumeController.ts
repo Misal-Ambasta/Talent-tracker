@@ -15,6 +15,7 @@ import logger from '../utils/logger';
 import { IJobPost } from '../models/JobPost';
 import { IResume } from '../models/Resume';
 import { extractCandidateDetails } from '../utils/candidate';
+import { validateFiles, ValidatedFile, ValidationResult } from '../utils/fileValidation';
 
 /**
  * Upload a resume
@@ -92,6 +93,10 @@ export const uploadResume = async (req: Request, res: Response): Promise<void> =
       return;
     }
     const matchResults = await matchResumesToJobCore(job, [resume], recruiterId, jobMode);
+
+    // Delete the file after successful processing
+    await deleteFile(file.path);
+    logger.info(`Successfully deleted file ${file.path} after processing`);
 
     res.status(201).json({
       message: 'Resume uploaded and matched successfully',
@@ -502,5 +507,345 @@ export const getJobMatchResults = async (req: Request, res: Response): Promise<v
   } catch (error) {
     logger.error('Error getting job match results:', error);
     res.status(500).json({ message: 'Error retrieving match results' });
+  }
+};
+
+
+// Types
+interface BatchUploadRequest {
+  files: Express.Multer.File[];
+  recruiterId: string;
+  body: {
+    jobMode: 'new' | 'existing';
+    title?: string;
+    description?: string;
+    jobId?: string;
+  };
+}
+
+interface ProcessedResume {
+  file: Express.Multer.File;
+  resume?: any;
+  error?: string;
+  candidateDetails?: any;
+}
+
+export interface BatchUploadResponse {
+  message: string;
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+    validationFailed: number;
+  };
+  successful: Array<{
+    id: string;
+    fileName: string;
+    originalFileName: string;
+    uploadDate: Date;
+    candidateDetails: any;
+  }>;
+  failed: Array<{
+    fileName: string;
+    error: string;
+    stage: 'validation' | 'parsing' | 'extraction' | 'database';
+  }>;
+  matchResults?: any[];
+}
+
+/**
+ * Upload multiple resumes in batch
+ * @route POST /api/resumes/bulk-upload
+ * @access Private
+ */
+
+// Utility functions
+const partition = <T>(predicate: (item: T) => boolean) => 
+  (items: T[]): [T[], T[]] => [
+    items.filter(predicate),
+    items.filter(item => !predicate(item))
+  ];
+
+const cleanupFailedFiles = async (files: Express.Multer.File[]): Promise<void> => {
+  await Promise.all(files.map(file => deleteFile(file.path).catch(() => {})));
+};
+
+// Helper function to normalize files array
+const getFilesArray = (files: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] } | undefined): Express.Multer.File[] => {
+  if (!files) return [];
+  if (Array.isArray(files)) return files;
+  
+  // If files is an object, flatten all arrays into a single array
+  return Object.values(files).flat();
+};
+
+// Business logic functions
+const createJobIfNeeded = async (
+  jobMode: string,
+  title: string | undefined,
+  description: string | undefined,
+  jobId: string | undefined,
+  recruiterId: string
+) => {
+  if (jobMode === 'new') {
+    if (!title || !description) {
+      throw new Error('Job title and description are required for new job');
+    }
+    const job = new JobPost({
+      title,
+      description,
+      recruiter: recruiterId,
+    });
+    await job.save();
+    return { job, usedJobId: job._id };
+  } else {
+    const job = await JobPost.findOne({ _id: jobId, recruiter: recruiterId });
+    if (!job) {
+      throw new Error('Job not found');
+    }
+    return { job, usedJobId: jobId };
+  }
+};
+
+const processValidFile = async (
+  validatedFile: ValidatedFile,
+  file: Express.Multer.File,
+  recruiterId: string
+): Promise<ProcessedResume> => {
+  try {
+    // Extract text from file
+    let parsedText = '';
+    try {
+      parsedText = await extractTextFromFile(file.path, file.mimetype);
+      parsedText = cleanExtractedText(parsedText);
+    } catch (error) {
+      await deleteFile(file.path);
+      return {
+        file,
+        error: `Failed to extract text: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+
+    // Extract candidate details
+    let candidateDetails;
+    try {
+      candidateDetails = await extractCandidateDetails(parsedText);
+    } catch (error) {
+      await deleteFile(file.path);
+      return {
+        file,
+        error: `Failed to extract candidate details: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+
+    // Create resume record
+    const resume = new Resume({
+      fileName: file.filename,
+      originalFileName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      filePath: file.path,
+      parsedText,
+      recruiter: recruiterId,
+      isProcessed: true,
+      candidateDetails,
+    });
+
+    await resume.save();
+
+    return {
+      file,
+      resume,
+      candidateDetails,
+    };
+  } catch (error) {
+    await deleteFile(file.path);
+    return {
+      file,
+      error: `Database error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+  }
+};
+
+// Controller functions
+export const batchUploadResumes = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  
+  try {
+    // Type assertion for multer files
+    const files = req.files as Express.Multer.File[];
+    const recruiterId = (req as any).recruiterId;
+    
+    // Input validation
+    if (!files || files.length === 0) {
+      res.status(400).json({ message: 'No files uploaded' });
+      return;
+    }
+
+    if (files.length > 10) {
+      await cleanupFailedFiles(files);
+      res.status(400).json({ message: 'Maximum 10 files allowed per batch' });
+      return;
+    }
+
+    const { jobMode, title, description, jobId } = req.body;
+
+    // Step 1: Pre-validate all files
+    logger.info(`Starting pre-validation for ${files.length} files`);
+    const filePaths = files.map(file => file.path);
+    const validationResult = await validateFiles(filePaths)();
+    console.log("validationResult", validationResult)
+    // If too many files failed validation, stop early
+    if (!validationResult.summary.shouldProceed) {
+      await cleanupFailedFiles(files);
+      
+      const failedValidation = validationResult.invalid.map(invalid => {
+        const file = files.find(f => f.path === invalid.path);
+        return {
+          fileName: file?.originalname || invalid.name,
+          error: invalid.validation.error || 'Validation failed',
+          stage: 'validation' as const,
+        };
+      });
+
+      res.status(400).json({
+        message: 'Too many files failed validation. Please fix issues and retry.',
+        summary: {
+          total: files.length,
+          successful: 0,
+          failed: validationResult.invalid.length,
+          validationFailed: validationResult.invalid.length,
+        },
+        successful: [],
+        failed: failedValidation,
+      } as BatchUploadResponse);
+      return;
+    }
+
+    // Step 2: Create or validate job
+    let job, usedJobId;
+    try {
+      ({ job, usedJobId } = await createJobIfNeeded(jobMode, title, description, jobId, recruiterId));
+    } catch (error) {
+      await cleanupFailedFiles(files);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : 'Job creation failed' 
+      });
+      return;
+    }
+
+    // Step 3: Process only validated files
+    const validFilePaths = new Set(validationResult.valid.map(v => v.path));
+    const [validFiles, invalidFiles] = partition<Express.Multer.File>(
+      file => validFilePaths.has(file.path)
+    )(files);
+
+    logger.info(`Processing ${validFiles.length} valid files, skipping ${invalidFiles.length} invalid files`);
+
+    // Process valid files in batches
+    const BATCH_SIZE = 3;
+    const processedResults: ProcessedResume[] = [];
+
+    for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
+      const batch = validFiles.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(file => {
+          const validatedFile = validationResult.valid.find(v => v.path === file.path)!;
+          return processValidFile(validatedFile, file, recruiterId);
+        })
+      );
+      processedResults.push(...batchResults);
+      
+      if (i + BATCH_SIZE < validFiles.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
+    // Clean up invalid files
+    await cleanupFailedFiles(invalidFiles);
+
+    // Separate successful and failed processing results
+    const [successfulResults, failedResults] = partition<ProcessedResume>(
+      result => !!result.resume && !result.error
+    )(processedResults);
+
+    await cleanupFailedFiles(failedResults.map(r => r.file));
+
+    // Step 4: Match successful resumes to job
+    let matchResults = [];
+    if (successfulResults.length > 0) {
+      try {
+        const resumes = successfulResults.map(r => r.resume).filter(Boolean);
+        matchResults = await matchResumesToJobCore(job, resumes, recruiterId, jobMode);
+      } catch (error) {
+        logger.error('Error matching resumes to job:', error);
+      }
+    }
+
+    // Prepare response
+    const successful = successfulResults.map(result => ({
+      id: result.resume._id,
+      fileName: result.resume.fileName,
+      originalFileName: result.resume.originalFileName,
+      uploadDate: result.resume.uploadDate,
+      candidateDetails: result.candidateDetails,
+    }));
+
+    const failed = [
+      ...validationResult.invalid.map(invalid => {
+        const file = files.find(f => f.path === invalid.path);
+        return {
+          fileName: file?.originalname || invalid.name,
+          error: invalid.validation.error || 'Validation failed',
+          stage: 'validation' as const,
+        };
+      }),
+      ...failedResults.map(result => ({
+        fileName: result.file.originalname,
+        error: result.error || 'Processing failed',
+        stage: 'parsing' as const,
+      })),
+    ];
+
+    // Delete all successful files after processing
+    await Promise.all(successfulResults.map(result => 
+      deleteFile(result.file.path).catch(err => 
+        logger.error(`Error deleting successful file ${result.file.path}:`, err)
+      )
+    ));
+    logger.info(`Deleted ${successfulResults.length} successfully processed files`);
+
+    const processingTime = Date.now() - startTime;
+    logger.info(`Batch upload completed in ${processingTime}ms: ${successful.length} successful, ${failed.length} failed`);
+
+    const response: BatchUploadResponse = {
+      message: successful.length > 0 
+        ? `Batch upload completed: ${successful.length} successful, ${failed.length} failed`
+        : 'All files failed processing',
+      summary: {
+        total: files.length,
+        successful: successful.length,
+        failed: failed.length,
+        validationFailed: validationResult.invalid.length,
+      },
+      successful,
+      failed,
+      matchResults: matchResults || [],
+    };
+
+    const statusCode = successful.length > 0 ? 201 : 400;
+    res.status(statusCode).json(response);
+
+  } catch (error) {
+    const files = req.files as Express.Multer.File[];
+    if (files && files.length > 0) {
+      await cleanupFailedFiles(files);
+    }
+
+    logger.error('Unexpected error in batch upload:', error);
+    res.status(500).json({ 
+      message: 'Unexpected error during batch upload',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };

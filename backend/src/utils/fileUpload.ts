@@ -62,7 +62,8 @@ const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFil
 export const resumeUpload = multer({
   storage,
   limits: {
-    fileSize: MAX_FILE_SIZE
+    fileSize: MAX_FILE_SIZE,
+    files: 10 // Maximum 10 files for batch upload
   },
   fileFilter
 });
