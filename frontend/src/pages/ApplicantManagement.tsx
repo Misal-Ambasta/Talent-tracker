@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppDispatch, useAppSelector } from "../hooks/reduxHooks";
+import { API_URLS } from "@/config/api";
 import {
   getApplicants,
   updateApplicantStatus,
@@ -72,7 +73,7 @@ const ApplicantManagement = () => {
       });
     }
   }, [error, toast]);
-
+  console.log("applicants: ", applicants);
   // Filter applicants based on search term, status, and job ID
   const filteredApplicants = applicants
     .filter((applicant) => {
@@ -127,6 +128,20 @@ const ApplicantManagement = () => {
       toast({
         title: "Applicant deleted",
         description: "The applicant has been successfully deleted.",
+      });
+    }
+  };
+
+  const handleViewResume = async (resume: string) => {
+    try {
+      // @ts-ignore 
+      const url = resume?.cloudinary?.url;
+      window.open(url, '_blank');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to open resume",
+        variant: "destructive",
       });
     }
   };
@@ -369,6 +384,7 @@ const ApplicantManagement = () => {
                         size="sm"
                         className="justify-start"
                         disabled={!applicant.resume}
+                        onClick={() => applicant.resume && handleViewResume(applicant.resume)}
                         title={!applicant.resume ? "No resume available" : "View resume"}>
                         <FileText className="w-4 h-4 mr-2" />
                         View Resume

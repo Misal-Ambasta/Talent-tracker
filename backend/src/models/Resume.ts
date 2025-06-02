@@ -11,6 +11,13 @@ export interface ICandidateDetails {
   summary: string;
 }
 
+// Interface for Cloudinary storage information
+export interface ICloudinaryStorage {
+  publicId: string;
+  url: string;
+  resourceType: string;
+}
+
 export interface IResume extends Document {
   _id: Types.ObjectId;
   fileName: string;
@@ -27,6 +34,7 @@ export interface IResume extends Document {
   isProcessed: boolean;
   processingError?: string;
   candidateDetails?: ICandidateDetails;
+  cloudinary?: ICloudinaryStorage;
 }
 
 const ResumeSchema: Schema = new Schema({
@@ -54,6 +62,12 @@ const ResumeSchema: Schema = new Schema({
     experience: String,
     skills: [String],
     summary: String
+  },
+  // Cloudinary storage information
+  cloudinary: {
+    publicId: String,
+    url: String,
+    resourceType: String
   }
 });
 

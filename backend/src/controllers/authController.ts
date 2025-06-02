@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Recruiter from '../models/Recruiter';
 import Joi from 'joi';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
+import { decrypt } from '../utils/encryption';
 
 const registerSchema = Joi.object({
   name: Joi.string().required(),
@@ -15,15 +16,29 @@ const loginSchema = Joi.object({
 });
 
 export const registerRecruiter = async (req: Request, res: Response): Promise<void> => {
-  const { error, value } = registerSchema.validate(req.body);
- 
-  if (error) {
-    res.status(400).json({ message: error.details[0].message });
-    return;
-  }
-
-  const { name, email, password } = value;
   try {
+    // Check if the request contains encrypted data
+    const { encryptedData } = req.body;
+    
+    if (!encryptedData) {
+      res.status(400).json({ message: 'Encrypted data is required' });
+      return;
+    }
+    
+    // Decrypt the data
+    const decryptedData = decrypt(encryptedData);
+    const userData = JSON.parse(decryptedData);
+    
+    // Validate the decrypted data
+    const { error, value } = registerSchema.validate(userData);
+    
+    if (error) {
+      res.status(400).json({ message: error.details[0].message });
+      return;
+    }
+
+    const { name, email, password } = value;
+    
     const existing = await Recruiter.findOne({ email });
     if (existing) {
       res.status(409).json({ message: 'Email already registered' });
@@ -43,19 +58,33 @@ export const registerRecruiter = async (req: Request, res: Response): Promise<vo
       token: accessToken 
     });
   } catch (err) {
-    res.status(500).json({ message: 'Registration failed', error: err });
+    console.error('Registration error:', err);
+    res.status(500).json({ message: 'Registration failed' });
   }
 };
 
 export const loginRecruiter = async (req: Request, res: Response): Promise<void> => {
-  const { error, value } = loginSchema.validate(req.body);
-  if (error) {
-    res.status(400).json({ message: error.details[0].message });
-    return;
-  }
-
-  const { email, password } = value;
   try {
+    // Check if the request contains encrypted data
+    const { encryptedData } = req.body;
+    
+    if (!encryptedData) {
+      res.status(400).json({ message: 'Encrypted data is required' });
+      return;
+    }
+    
+    // Decrypt the data
+    const decryptedData = decrypt(encryptedData);
+    const loginData = JSON.parse(decryptedData);
+    // Validate the decrypted data
+    const { error, value } = loginSchema.validate(loginData);
+    if (error) {
+      res.status(400).json({ message: error.details[0].message });
+      return;
+    }
+
+    const { email, password } = value;
+    
     const recruiter = await Recruiter.findOne({ email });
     if (!recruiter) {
       res.status(401).json({ message: 'Invalid credentials' });
@@ -81,6 +110,7 @@ export const loginRecruiter = async (req: Request, res: Response): Promise<void>
       token: accessToken 
     });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ message: 'Login failed', error: err });
   }
 };
