@@ -18,6 +18,12 @@ An end-to-end, AI-powered Applicant Tracking System designed for recruiters to e
 
 ---
 
+## Screenshots
+![screencapture-localhost-8080-2025-06-02-21_07_47](https://github.com/user-attachments/assets/286dea3b-5666-4177-b35e-2620cf91e958)
+
+![screencapture-localhost-8080-dashboard-2025-06-02-21_06_57](https://github.com/user-attachments/assets/1e93db13-045e-4665-8790-3588829e529e)
+---
+
 ## Folder Structure
 ```
 AI-Powered-Applicant-Tracking-System/
@@ -113,15 +119,6 @@ npm run preview  # Preview production build
 ## Environment Variables
 - See `backend/src/config/index.ts` for all required backend environment variables (MongoDB URI, JWT secrets, OpenAI keys, etc.).
 - Frontend may require API base URL configuration (see `frontend/src/config/`).
-
----
-
-## Contribution & Testing
-- **Contribution**: Please fork the repo and submit PRs. Follow code style enforced by ESLint/Prettier.
-- **Testing**: (See `todo.md` Phase 11)
-  - Backend: Unit, integration, and service tests (Jest/Mocha recommended)
-  - Frontend: Component, Redux, and E2E tests (React Testing Library, Cypress recommended)
-  - AI: Accuracy/quality tests for resume matching, chat summarization, bias detection, audio analysis
 
 ---
 
