@@ -19,6 +19,7 @@ interface BulkResumeUploadProps {
 export interface BulkResumeUploadRef {
   getSelectedFiles: () => File[];
   handleUpload: () => Promise<void>;
+  clearAll: () => void;
 }
 
 const BulkResumeUpload = forwardRef<BulkResumeUploadRef, BulkResumeUploadProps>(({ onUploadComplete, jobMode, jobId, title, description }, ref) => {
@@ -33,7 +34,8 @@ const BulkResumeUpload = forwardRef<BulkResumeUploadRef, BulkResumeUploadProps>(
   // Expose methods to parent component via ref
   useImperativeHandle(ref, () => ({
     getSelectedFiles: () => selectedFiles,
-    handleUpload
+    handleUpload,
+    clearAll
   }));
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,23 +105,21 @@ const BulkResumeUpload = forwardRef<BulkResumeUploadRef, BulkResumeUploadProps>(
         title,
         description
       });
-      
       setIsUploading(false);
       setUploadProgress(100);
-      
-      // Pass both the files and the response to the parent component
-      onUploadComplete(selectedFiles.map(file => ({
-        file,
-        matchResults: response.matchResults || []
-      })));
-      
+
+      // Pass only the backend response to the parent component
+      onUploadComplete(response.matchResults || []);
+
       toast({
         title: "Upload complete",
         description: `${selectedFiles.length} resumes processed successfully`,
       });
-      
-      // Clear files after successful upload
+
+      // Clear files and reset file input after successful upload
       setSelectedFiles([]);
+      const fileInput = document.getElementById('bulk-resume-upload') as HTMLInputElement | null;
+      if (fileInput) fileInput.value = '';
     } catch (error) {
       setIsUploading(false);
       toast({
@@ -127,12 +127,18 @@ const BulkResumeUpload = forwardRef<BulkResumeUploadRef, BulkResumeUploadProps>(
         description: "There was an error processing your resumes",
         variant: "destructive",
       });
+      // Reset file input after failed upload as well
+      const fileInput = document.getElementById('bulk-resume-upload') as HTMLInputElement | null;
+      if (fileInput) fileInput.value = '';
     }
   };
 
   const clearAll = () => {
     setSelectedFiles([]);
     setUploadProgress(0);
+    // Reset the file input value so the same files can be selected again
+    const fileInput = document.getElementById('bulk-resume-upload') as HTMLInputElement | null;
+    if (fileInput) fileInput.value = '';
   };
 
   return (

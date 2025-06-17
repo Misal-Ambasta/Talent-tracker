@@ -19,6 +19,7 @@ import { processInterviewText, processInterviewAudio, processRecordedAudio } fro
 import { processInterviewTextInput } from "@/slices/aiResultsSlice";
 import { RootState } from "@/store";
 import type { AppDispatch } from "@/store";
+import { clearCurrentInterviewAnalysis } from "@/slices/aiResultsSlice";
 
 const InterviewFeedback = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -131,6 +132,16 @@ const InterviewFeedback = () => {
     }
   };
 
+  // Reset handler to clear all fields and state
+  const handleReset = () => {
+    setSelectedCandidate("");
+    setInterviewType("");
+    setRawFeedback("");
+    setInputMethod("text");
+    dispatch(clearCurrentInterviewAnalysis());
+    // If child components (AudioUploadComponent, ChatInputComponent) support refs, reset them too
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
@@ -145,6 +156,7 @@ const InterviewFeedback = () => {
             </h1>
             <p className="text-gray-600 dark:text-gray-400">Generate structured feedback from interview notes using AI</p>
           </div>
+          <Button variant="outline" onClick={handleReset} className="ml-4">Reset</Button>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
@@ -199,7 +211,7 @@ const InterviewFeedback = () => {
                 <div>
                   <Label>Input Method</Label>
                   <Tabs value={inputMethod} onValueChange={(value) => setInputMethod(value as "text" | "audio" | "recording")}>
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="text" className="flex items-center">
                         <Type className="w-4 h-4 mr-2" />
                         Text Notes
@@ -208,10 +220,10 @@ const InterviewFeedback = () => {
                         <Upload className="w-4 h-4 mr-2" />
                         Audio Upload
                       </TabsTrigger>
-                      <TabsTrigger value="recording" className="flex items-center">
+                      {/* <TabsTrigger value="recording" className="flex items-center">
                         <Mic className="w-4 h-4 mr-2" />
                         Record Audio
-                      </TabsTrigger>
+                      </TabsTrigger> */}
                     </TabsList>
                   </Tabs>
                 </div>
@@ -253,7 +265,7 @@ const InterviewFeedback = () => {
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <div className="text-center">
                         <div className={`text-3xl font-bold ${getScoreColor(generatedFeedback.overallScore)}`}>
-                          {generatedFeedback.overallScore}/10
+                          {generatedFeedback.overallScore}/100
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400">Overall Score</p>
                       </div>

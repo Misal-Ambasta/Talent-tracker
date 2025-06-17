@@ -110,7 +110,7 @@ export const calculateCosineSimilarity = (vecA: number[], vecB: number[]): numbe
 export const extractSkills = async (text: string): Promise<string[]> => {
   try {
     const prompt = `
-      Extract all professional skills from the following text. 
+      Extract all professional skills from the following text. It should in descending order, the most important skills first.
       Return ONLY a JSON array of strings with no explanation or other text.
       Example output format: ["JavaScript", "React", "Node.js"]
       
@@ -139,5 +139,52 @@ export const extractSkills = async (text: string): Promise<string[]> => {
   } catch (error) {
     logger.error('Error extracting skills:', error);
     return [];
+  }
+};
+
+/**
+ * Calculate resume match score using GPT-4o
+ * @param resumeText Resume text content
+ * @param jobDescription Job description text
+ * @returns Match score between 0-100
+ */
+export const calculateResumeMatchScore = async (resumeText: string, jobDescription: string): Promise<number> => {
+  try {
+    // Truncate texts to avoid token limits
+    const truncatedResume = resumeText.slice(0, 6000);
+    const truncatedJobDescription = jobDescription.slice(0, 2000);
+    
+    const response = await openai.chat.completions.create({ 
+      model: "gpt-4o", 
+      messages: [ 
+        { 
+          role: "system", 
+          content: `You are a resume matcher AI. Analyze the resume and job description and return ONLY a fit score between 0 and 100. Do not provide any explanation, reasoning, or additional text.`, 
+        }, 
+        { 
+          role: "user", 
+          content: `Resume:\n${truncatedResume}\n\nJob Description:\n${truncatedJobDescription}\n\nOnly return a number between 0 and 100.`, 
+        }, 
+      ],
+      temperature: 0.2,
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      logger.error('Empty response from GPT-4o resume matching');
+      return 0;
+    }
+    
+    // Extract the number from the response
+    const score = parseInt(content.trim(), 10);
+    if (isNaN(score) || score < 0 || score > 100) {
+      logger.error(`Invalid score from GPT-4o: ${content}`);
+      return 0;
+    }
+    
+    return score;
+  } catch (error) {
+    logger.error('Error calculating resume match score with GPT-4o:', error);
+    return 0;
   }
 };

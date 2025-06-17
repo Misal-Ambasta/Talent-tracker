@@ -26,7 +26,7 @@ interface ResumeAnalysis {
   missingSkills?: string[];
   matchSummary?: string;
   matchDate: string;
-  matchMethod: 'vector' | 'keyword' | 'hybrid';
+  matchMethod: 'vector' | 'keyword' | 'hybrid' | 'gpt-4o';
   modelVersion?: string;
 }
 

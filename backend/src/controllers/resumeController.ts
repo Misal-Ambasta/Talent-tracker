@@ -10,6 +10,7 @@ import {
   generateEmbedding,
   calculateCosineSimilarity,
   extractSkills,
+  calculateResumeMatchScore,
 } from '../services/openaiService';
 import logger from '../utils/logger';
 import { IJobPost } from '../models/JobPost';
@@ -34,26 +35,13 @@ export const uploadResume = async (req: Request, res: Response): Promise<void> =
     const { jobMode, title, description, jobId } = req.body;
     let usedJobId = jobId;
 
-    // If jobMode is 'new', create a new JobPost
+    // Use createJobIfNeeded for job creation/lookup
     let job;
-    if (jobMode === 'new') {
-      if (!title || !description) {
-        res.status(400).json({ message: 'Job title and description are required for new job' });
-        return;
-      }
-      job = new JobPost({
-        title,
-        description,
-        recruiter: recruiterId,
-      });
-      await job.save();
-      usedJobId = job._id;
-    } else {
-      job = await JobPost.findOne({ _id: usedJobId, recruiter: recruiterId });
-      if (!job) {
-        res.status(404).json({ message: 'Job not found' });
-        return;
-      }
+    try {
+      ({ job, usedJobId } = await createJobIfNeeded(jobMode, title, description, jobId, recruiterId));
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : 'Job creation failed' });
+      return;
     }
 
     // Extract text from the uploaded file
@@ -314,35 +302,37 @@ export const matchResumesToJobCore = async (
   } else {
     jobText = `\n      Job Title: ${job.title}\n      Company: ${job.company}\n      Description: ${job.description}\n      Requirements: ${job.requirements}\n      Responsibilities: ${job.responsibilities}\n      Skills: ${job.skills.join(', ')}\n    `;
   }
-
+  
   // Generate embedding for job
-  const jobEmbedding = await generateEmbedding(jobText);
+  // const jobEmbedding = await generateEmbedding(jobText);
   
   // Process each resume
   const matchResults = [];
   const candidatesInSampleFormat = [];
 
   for (const resume of resumes) {
-    // Check if resume already has an embedding
-    let resumeEmbedding = resume.textEmbedding;
+    // We're now using GPT-4o for scoring, but we'll still maintain embeddings for backward compatibility
+    // and potential future use cases that might need vector search
+    // let resumeEmbedding = resume.textEmbedding;
     
-    // If not, generate one
-    if (!resumeEmbedding || resumeEmbedding.length === 0) {
-      resumeEmbedding = await generateEmbedding(resume.parsedText);
-      resume.textEmbedding = resumeEmbedding;
-      resume.embeddingModel = 'text-embedding-ada-002';
-      resume.embeddingDate = new Date();
-      await resume.save();
-    }
+    // If embedding doesn't exist, generate one for potential future use
+    // if (!resumeEmbedding || resumeEmbedding.length === 0) {
+    //   resumeEmbedding = await generateEmbedding(resume.parsedText);
+    //   resume.textEmbedding = resumeEmbedding;
+    //   resume.embeddingModel = 'text-embedding-ada-002';
+    //   resume.embeddingDate = new Date();
+    //   await resume.save();
+    // }
 
-    // Calculate similarity score
-    const similarityScore = calculateCosineSimilarity(jobEmbedding, resumeEmbedding);
-
+    // Calculate match score using GPT-4o
+    const overallScore = await calculateResumeMatchScore(resume.parsedText, jobText);
+    // const similarityScore = calculateCosineSimilarity(jobEmbedding, resumeEmbedding);
     // Extract skills from resume
     const resumeSkills = await extractSkills(resume.parsedText);
 
     // Calculate skill match
     const jobSkills = job.skills ? job.skills.map((skill: any) => skill.toLowerCase()) : [];
+    
     const matchedSkills = resumeSkills.filter((skill: any) =>
       jobSkills.some(
         (jobSkill: any) =>
@@ -359,10 +349,8 @@ export const matchResumesToJobCore = async (
 
     // Calculate skill match percentage
     const skillsMatchScore = jobSkills.length > 0 ? (matchedSkills.length / jobSkills.length) * 100 : 0;
-
-    // Convert similarity score to percentage (0-100)
-    const overallScore = Math.round(similarityScore * 100);
-
+    const clampedSkillsMatch = Math.min(100, Math.round(skillsMatchScore));
+    // const overallScore2 = Math.round(similarityScore * 100);
     // Generate strengths and concerns based on match results
     const strengths = [];
     const concerns = [];
@@ -413,7 +401,7 @@ export const matchResumesToJobCore = async (
     if (existingMatch) {
       existingMatch.overallScore = overallScore;
       existingMatch.categoryScores = {
-        skillsMatch: Math.round(skillsMatchScore),
+        skillsMatch: clampedSkillsMatch,
         experienceMatch: 0,
         educationMatch: 0,
         roleMatch: 0,
@@ -421,7 +409,7 @@ export const matchResumesToJobCore = async (
       existingMatch.matchedSkills = matchedSkills;
       existingMatch.missingSkills = missingSkills;
       existingMatch.matchDate = new Date();
-      existingMatch.matchMethod = 'vector';
+      existingMatch.matchMethod = 'gpt-4o';
       // Add candidate details to match result
       existingMatch.candidateDetails = candidateInSampleFormat;
       matchResult = await existingMatch.save();
@@ -432,7 +420,7 @@ export const matchResumesToJobCore = async (
         recruiter: recruiterId,
         overallScore,
         categoryScores: {
-          skillsMatch: Math.round(skillsMatchScore),
+          skillsMatch: clampedSkillsMatch,
           experienceMatch: 0,
           educationMatch: 0,
           roleMatch: 0,
@@ -440,8 +428,8 @@ export const matchResumesToJobCore = async (
         matchedSkills,
         missingSkills,
         matchDate: new Date(),
-        matchMethod: 'vector',
-        modelVersion: 'text-embedding-ada-002',
+        matchMethod: 'gpt-4o',
+        modelVersion: 'gpt-4o',
         candidateDetails: candidateInSampleFormat
       });
     }
@@ -611,10 +599,18 @@ const createJobIfNeeded = async (
     if (!title || !description) {
       throw new Error('Job title and description are required for new job');
     }
+    // Extract skills from the job description
+    let extractedSkills: string[] = [];
+    try {
+      extractedSkills = await extractSkills(description);
+    } catch (err) {
+      logger.error('Error extracting skills from job description:', err);
+    }
     const job = new JobPost({
       title,
       description,
       recruiter: recruiterId,
+      skills: extractedSkills,
     });
     await job.save();
     return { job, usedJobId: job._id };
@@ -783,17 +779,17 @@ export const batchUploadResumes = async (req: Request, res: Response): Promise<v
           
           // Try to upload to Cloudinary first
           let cloudinaryResult;
-          try {
-            cloudinaryResult = await uploadToCloudinary(file.path, {
-              folder: 'resumes',
-              public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
-              resource_type: 'raw'
-            });
-            logger.info(`Successfully uploaded ${file.originalname} to Cloudinary`);
-          } catch (cloudinaryError) {
-            logger.error(`Error uploading ${file.originalname} to Cloudinary:`, cloudinaryError);
-            // Continue with local file if Cloudinary upload fails
-          }
+          // try {
+          //   cloudinaryResult = await uploadToCloudinary(file.path, {
+          //     folder: 'resumes',
+          //     public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+          //     resource_type: 'raw'
+          //   });
+          //   logger.info(`Successfully uploaded ${file.originalname} to Cloudinary`);
+          // } catch (cloudinaryError) {
+          //   logger.error(`Error uploading ${file.originalname} to Cloudinary:`, cloudinaryError);
+          //   // Continue with local file if Cloudinary upload fails
+          // }
           
           // Process the file with Cloudinary information if available
           const result = await processValidFile(validatedFile, file, recruiterId, cloudinaryResult);

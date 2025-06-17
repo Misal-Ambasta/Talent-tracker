@@ -20,7 +20,7 @@ export interface IResumeMatchResult extends Document {
   missingSkills?: string[];
   matchSummary?: string;
   matchDate: Date;
-  matchMethod: 'vector' | 'keyword' | 'hybrid';
+  matchMethod: 'vector' | 'keyword' | 'hybrid' | 'gpt-4o';
   modelVersion?: string;
   candidateDetails?: ICandidateDetails;
 }
@@ -60,7 +60,7 @@ const ResumeMatchResultSchema: Schema = new Schema({
   matchMethod: { 
     type: String, 
     required: true,
-    enum: ['vector', 'keyword', 'hybrid'],
+    enum: ['vector', 'keyword', 'hybrid', 'gpt-4o'],
     default: 'vector'
   },
   modelVersion: { type: String },

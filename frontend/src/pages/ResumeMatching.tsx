@@ -34,6 +34,7 @@ const ResumeMatching = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const bulkResumeComponentRef = useRef<BulkResumeUploadRef>(null);
   const dispatch = useAppDispatch();
+  const [noMatchesFound, setNoMatchesFound] = useState(false);
 
   // Add a useEffect to update job description when a job is selected
   useEffect(() => {
@@ -58,41 +59,33 @@ const ResumeMatching = () => {
     
     // For bulk mode, check if files are selected but not yet uploaded
     if (uploadMode === "bulk" && !bulkUploadComplete && bulkResumeComponentRef.current?.getSelectedFiles()?.length > 0) {
-      // Files are selected but not uploaded, so handle the upload first
       setIsMatching(true);
-      
       try {
-        // Get selected files from the BulkResumeUpload component
         const selectedFiles = bulkResumeComponentRef.current.getSelectedFiles();
-        
-        // Use the bulk upload service directly
-        const response = await bulkUploadResumes({
+        setProcessedResumes(selectedFiles);
+        setBulkUploadComplete(true);
+        // Immediately run the matching logic with selectedFiles
+        const result = await dispatch(bulkUploadResumesThunk({
           resumeFiles: selectedFiles,
           jobMode,
           jobId: jobMode === 'existing' ? jobs.find(j => j.title === selectedJob)?._id : undefined,
           title: jobMode === 'new' ? newJobTitle : undefined,
           description: jobDescription
-        });
-        // Store the processed files
-        setProcessedResumes(selectedFiles);
-        setBulkUploadComplete(true);
-        
-        // Update match results if available
-        if (response.matchResults && response.matchResults.length > 0) {
-          setMatchResults(response.matchResults);
-          if (inputRef.current) {
-            inputRef.current.value = '';
-          }
-          setSingleResumeFile(null);
-          setSingleResumeUploaded(false);
+        })).unwrap();
+        if (result.matchResults && result.matchResults.length > 0) {
+          setMatchResults(result.matchResults);
+          setNoMatchesFound(false);
           toast({
-            title: "Upload and matching complete",
-            description: `${selectedFiles.length} resumes processed and matched successfully`,
+            title: "Matching complete",
+            description: `Found ${result.matchResults.length} candidates ranked by fit score`,
           });
         } else {
+          setMatchResults([]);
+          setNoMatchesFound(true);
           toast({
-            title: "Upload complete",
-            description: `${selectedFiles.length} resumes uploaded successfully`,
+            title: "Processing complete",
+            description: "Resumes were processed but no matches were found",
+            variant: "destructive",
           });
         }
       } catch (error: any) {
@@ -148,14 +141,18 @@ const ResumeMatching = () => {
         // Update the match results
         if (result.matchResults && result.matchResults.length > 0) {
           setMatchResults(result.matchResults);
+          setNoMatchesFound(false);
           toast({
             title: "Matching complete",
             description: `Found ${result.matchResults.length} candidates ranked by fit score`,
           });
         } else {
+          setMatchResults([]);
+          setNoMatchesFound(true);
           toast({
             title: "Processing complete",
             description: "Resumes were processed but no matches were found",
+            variant: "destructive",
           });
         }
       }
@@ -235,6 +232,30 @@ const ResumeMatching = () => {
     if (score >= 90) return "default";
     if (score >= 80) return "secondary";
     return "outline";
+  };
+
+  // Add a reset handler
+  const handleReset = () => {
+    setUploadMode("bulk");
+    setJobMode("existing");
+    setSelectedJob("");
+    setNewJobTitle("");
+    setJobDescription("");
+    setIsMatching(false);
+    setMatchResults([]);
+    setProcessedResumes([]);
+    setSingleResumeUploaded(false);
+    setSingleResumeFile(null);
+    setBulkUploadComplete(false);
+    setNoMatchesFound(false);
+    // Reset BulkResumeUpload component if possible
+    if (bulkResumeComponentRef.current && typeof bulkResumeComponentRef.current.clearAll === 'function') {
+      bulkResumeComponentRef.current.clearAll();
+    }
+    // Reset file input for single mode
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
   };
 
   return (
@@ -409,32 +430,34 @@ const ResumeMatching = () => {
                 )}
 
                 {/* Match Button */}
-                <Button 
-                  onClick={handleMatch} 
-                  className="w-full"
-                  disabled={isMatching || !isUploadComplete()}
-                >
-                  {isMatching ? (
-                    <>
-                      <Brain className="w-4 h-4 mr-2 animate-spin" />
-                      Analyzing Candidates...
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="w-4 h-4 mr-2" />
-                      Start AI Matching
-                    </>
-                  )}
-                </Button>
-
-                {isMatching && (
-                  <div className="space-y-2">
-                    <Progress value={75} className="w-full" />
-                    <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                      Processing resumes with AI...
-                    </p>
-                  </div>
-                )}
+                <div className="flex space-x-2 w-full">
+                  <Button 
+                    onClick={handleMatch} 
+                    className="flex-1"
+                    disabled={isMatching || !isUploadComplete()}
+                  >
+                    {isMatching ? (
+                      <>
+                        <Brain className="w-4 h-4 mr-2 animate-spin text-blue-600" />
+                        Analyzing Candidates...
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="w-4 h-4 mr-2 " />
+                        Start AI Matching
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="flex-2"
+                    type="button"
+                    onClick={handleReset}
+                    disabled={isMatching}
+                  >
+                    Reset
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -503,7 +526,7 @@ const ResumeMatching = () => {
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white mb-2">Skills Match</h4>
                           <div className="flex flex-wrap gap-2 mb-4">
-                            {candidate.skills.map((skill, skillIndex) => (
+                            {candidate.skills.slice(0, 5).map((skill, skillIndex) => (
                               <Badge key={skillIndex} variant="secondary">{skill}</Badge>
                             ))}
                           </div>
@@ -546,10 +569,22 @@ const ResumeMatching = () => {
                   </Card>
                 ))}
               </div>
-            ) : (
+            ) : noMatchesFound ? (
               <Card className="h-96 flex items-center justify-center">
                 <CardContent className="text-center">
                   <Brain className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-red-600 dark:text-red-400 mb-2">
+                    No Matches Found
+                  </h3>
+                  <p className="text-yellow-700 dark:text-yellow-400">
+                    Resumes were processed, but no candidates matched the job requirements. Try uploading different resumes or adjusting the job description.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="h-96 flex items-center justify-center">
+                <CardContent className="text-center">
+                  <Brain className="w-16 h-16 mx-auto text-blue-600 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                     Ready for AI Matching
                   </h3>

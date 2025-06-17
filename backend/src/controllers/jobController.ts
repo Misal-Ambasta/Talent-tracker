@@ -228,7 +228,7 @@ export const updateJob = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * Delete a job post (soft delete by setting isActive to false)
+ * Delete a job post (hard delete by permanently removing from the database)
  * @route DELETE /api/jobs/:jobId
  * @access Private
  */
@@ -245,10 +245,10 @@ export const deleteJob = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     
-    // Soft delete by setting isActive to false
-    await JobPost.findByIdAndUpdate(jobId, { isActive: false });
+    // Hard delete: permanently remove the job post from the database
+    await JobPost.findByIdAndDelete(jobId);
     
-    res.status(200).json({ message: 'Job post deleted successfully' });
+    res.status(200).json({ message: 'Job post permanently deleted' });
   } catch (error) {
     logger.error('Error deleting job:', error);
     res.status(500).json({ message: 'Error deleting job post' });

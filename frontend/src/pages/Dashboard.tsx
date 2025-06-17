@@ -1,4 +1,3 @@
-
 import Navigation from "@/components/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,11 +8,13 @@ import { Link } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../hooks/reduxHooks";
 import { getJobs } from "../slices/jobsSlice";
 import { useEffect } from "react";
+import { formatDistanceToNow, parseISO } from 'date-fns';
 
 const Dashboard = () => {
   const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { jobs } = useAppSelector((state) => state.jobs);
 
   useEffect(() => {
     // Fetch jobs after successful login
@@ -30,11 +31,11 @@ const Dashboard = () => {
     { title: "Offers Extended", value: "5", icon: TrendingUp, trend: "+2 this month", color: "text-orange-600" },
   ];
 
-  const recentJobs = [
-    { title: "Senior React Developer", applicants: 45, status: "Active", posted: "2 days ago" },
-    { title: "Product Manager", applicants: 32, status: "Active", posted: "5 days ago" },
-    { title: "UX Designer", applicants: 28, status: "Paused", posted: "1 week ago" },
-  ];
+  // Get top 3 most recently posted jobs, sorted by postedDate descending
+  const recentJobs = jobs
+    .slice()
+    .sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
+    .slice(0, 3);
 
   const recentActivity = [
     { action: "New application received", job: "Senior React Developer", time: "2 hours ago" },
@@ -106,23 +107,32 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentJobs.map((job, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow">
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">{job.title}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{job.applicants} applicants • {job.posted}</p>
+                {recentJobs.map((job, index) => {
+                  // Map backend status to display label and color
+                  const statusLabel = job.status === 'open' ? 'Active' : job.status === 'closed' ? 'Paused' : (job.status || 'Active');
+                  const statusColor = job.status === 'open'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                  return (
+                    <div
+                      key={job._id || index}
+                      className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow cursor-pointer"
+                      onClick={() => job._id && navigate(`/jobs/${job._id}`)}
+                    >
+                      <div>
+                        <h3 className="font-medium text-gray-900 dark:text-white">{job.title}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {(job.applicantCount ?? 0)} applicants • {job.postedDate ? formatDistanceToNow(parseISO(job.postedDate), { addSuffix: true }) : ''}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`px-2 py-1 text-xs rounded-full ${statusColor}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        job.status === 'Active' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                          : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                      }`}>
-                        {job.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
